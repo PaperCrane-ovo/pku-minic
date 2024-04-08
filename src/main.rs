@@ -7,6 +7,7 @@ use std::fs::read_to_string;
 use std::io::{Result, Write};
 
 mod ast;
+mod ir2riscv;
 
 // 引用 lalrpop 生成的解析器
 // 因为我们刚刚创建了 sysy.lalrpop, 所以模块名是 sysy
@@ -43,11 +44,10 @@ fn main() -> Result<()> {
             let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
 
             // 输出解析得到的 AST
-            // println!("{:#?}", ast);
+            println!("{:#?}", ast);
             // 输出 koopa 代码到output文件
             // 输出重定向
 
-            ast.dump2koopa(&mut output);
         }
         Mode::RISCV => {
             // 调用 lalrpop 生成的 parser 解析输入文件
