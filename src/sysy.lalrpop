@@ -30,24 +30,77 @@ Stmt: Stmt = {
     "return" <exp: Exp> ";" => Stmt::Return(Return{<>}),
 };
 
-Exp: Exp = {
-    <unary_exp: UnaryExp> => Exp { <> },
+Exp: Exp = <lor_exp:LOrExp> => <>;
+
+PrimaryExp: Exp = {
+    "(" <exp: Exp> ")" => <>,
+    <num:Number> => Exp::Number(<>),
 }
 
-PrimaryExp: PrimaryExp = {
-    "(" <exp:Exp> ")" => PrimaryExp::Exp(Box::new(<>)),
-    Number => PrimaryExp::Number(<>),
+
+UnaryExp: Exp = {
+    <primary_exp: PrimaryExp> => <>,
+    <unary_op: UnaryOp> <unary_exp:UnaryExp> => Exp::UnaryExp{op:unary_op, exp:Box::new(unary_exp)},
+    
 }
 
-UnaryExp: UnaryExp = {
-    <primary_exp: PrimaryExp> => UnaryExp::Primary(<>),
-    "+" <UnaryExp> => <>,
-    <unary_op:UnaryOp> <unary_exp: UnaryExp> => UnaryExp::Unary(unary_op, Box::new(unary_exp)),
+UnaryOp: MyUnaryOp = {
+    "-" => MyUnaryOp::Neg,
+    "!" => MyUnaryOp::Not,
+    "+" => MyUnaryOp::Pos,
 }
 
-UnaryOp: UnaryOp = {
-    "-" => UnaryOp::Neg,
-    "!" => UnaryOp::Not,
+MulExp: Exp = {
+    <unary_exp: UnaryExp> => <>,
+    <mul_exp: MulExp> <mul_op:MulOp> <unary_exp: UnaryExp> => Exp::BinaryExp{op:mul_op, exp1:Box::new(mul_exp), exp2:Box::new(unary_exp)},
+}
+
+MulOp: MyBinaryOp = {
+    "*" => MyBinaryOp::Mul,
+    "/" => MyBinaryOp::Div,
+    "%" => MyBinaryOp::Mod,
+}
+
+AddExp: Exp = {
+    <mul_exp: MulExp> => <>,
+    <add_exp: AddExp> <add_op:AddOp> <mul_exp: MulExp> => Exp::BinaryExp{op:add_op, exp1:Box::new(add_exp), exp2:Box::new(mul_exp)},
+}
+
+AddOp: MyBinaryOp = {
+    "+" => MyBinaryOp::Add,
+    "-" => MyBinaryOp::Sub,
+}
+
+RelExp: Exp = {
+    <add_exp: AddExp> => <>,
+    <rel_exp: RelExp> <rel_op:RelOp> <add_exp: AddExp> => Exp::BinaryExp{op:rel_op, exp1:Box::new(rel_exp), exp2:Box::new(add_exp)},
+}
+
+RelOp: MyBinaryOp = {
+    "<" => MyBinaryOp::Lt,
+    "<=" => MyBinaryOp::Le,
+    ">" => MyBinaryOp::Gt,
+    ">=" => MyBinaryOp::Ge,
+}
+
+EqExp: Exp = {
+    <rel_exp: RelExp> => <>,
+    <eq_exp: EqExp> <eq_op:EqOp> <rel_exp: RelExp> => Exp::BinaryExp{op:eq_op, exp1:Box::new(eq_exp), exp2:Box::new(rel_exp)},
+}
+
+EqOp: MyBinaryOp = {
+    "==" => MyBinaryOp::Eq,
+    "!=" => MyBinaryOp::Ne,
+}
+
+LAndExp: Exp = {
+    <eq_exp: EqExp> => <>,
+    <land_exp: LAndExp> "&&" <eq_exp: EqExp> => Exp::BinaryExp{op: MyBinaryOp::LAnd, exp1:Box::new(land_exp), exp2:Box::new(eq_exp)},
+}
+
+LOrExp: Exp = {
+    <land_exp: LAndExp> => <>,
+    <lor_exp: LOrExp> "||" <land_exp: LAndExp> => Exp::BinaryExp{op: MyBinaryOp::LOr, exp1:Box::new(lor_exp), exp2:Box::new(land_exp)},
 }
 
 Number: i32 = <num: IntConst> => <>;
