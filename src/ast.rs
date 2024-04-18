@@ -1,8 +1,5 @@
 // Path: src/ast.rs
 
-// 定义全局变量cur_varid，用于记录当前的变量id
-static mut CUR_VARID: i32 = 0;
-
 
 
 #[derive(Debug)]

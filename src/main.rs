@@ -1,5 +1,4 @@
 use koopa::back::KoopaGenerator;
-use koopa::front::Driver;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
@@ -37,7 +36,6 @@ fn main() -> Result<()> {
         _ => panic!("Invalid mode"),
     };
 
-    let mut output = String::new();
     match mode {
         Mode::KOOPA => {
             // 调用 lalrpop 生成的 parser 解析输入文件
@@ -48,25 +46,14 @@ fn main() -> Result<()> {
             // 输出 koopa 代码到output文件
             // 输出重定向
             let koopa_ir = ast.build_ir();
-            let mut outfile = std::fs::File::create(_output)?;
+            let outfile = std::fs::File::create(_output)?;
             let mut generator = KoopaGenerator::new(outfile);
             generator.generate_on(&koopa_ir)?;
         
         }
         Mode::RISCV => {
             // 调用 lalrpop 生成的 parser 解析输入文件
-            let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
-
-            // 输出解析得到的 AST
-            // println!("{:#?}", ast);
-            // 输出 koopa 代码到output文件
-            // 输出重定向
-            let mut result = String::new();
-
-            //ast.dump2koopa(&mut result);
-            // 使用koopa建立内存形式的Koopa IR
-            let driver = Driver::from(result);
-            let program = driver.generate_program().unwrap();
+            
         }
     }
 
