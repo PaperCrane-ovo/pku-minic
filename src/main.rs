@@ -2,11 +2,13 @@ use koopa::back::KoopaGenerator;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
-use std::io::Result;
+use std::io::{Result, Write};
+use crate::ir2riscv::riscvgen::GenerateAsm;
 
 mod ast;
 mod ir2riscv;
 mod src2ir;
+mod utils;
 
 // 引用 lalrpop 生成的解析器
 // 因为我们刚刚创建了 sysy.lalrpop, 所以模块名是 sysy
@@ -52,8 +54,15 @@ fn main() -> Result<()> {
         
         }
         Mode::RISCV => {
-            // 调用 lalrpop 生成的 parser 解析输入文件
-            
+            let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
+            let ir_program = ast.build_ir();
+
+
+            let mut outfile = std::fs::File::create(_output)?;
+            let mut asm = String::new();
+            ir_program.generate(&mut asm);
+            outfile.write_all(asm.as_bytes())?;
+
         }
     }
 
