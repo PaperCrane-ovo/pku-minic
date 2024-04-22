@@ -1,7 +1,7 @@
     .text
     .globl main
 main:
-    xor x0,x0,x0
-    seqz x0,x0
-    mv a0, x0
+    xor t0,x0,x0
+    seqz t0,t0
+    mv a0, t0
     ret

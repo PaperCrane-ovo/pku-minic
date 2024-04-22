@@ -240,8 +240,6 @@ impl GenerateAsmValue for Value{
         else {
             return lhs.to_string();
         }
-
-
     }
     
 }
