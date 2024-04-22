@@ -1,3 +1,5 @@
+set shell := ["powershell.exe", "-c"]
+
 binary := "pku-minic" + if os_family() == "windows" { ".exe" } else { "" }
 binary_path := "target/debug/" + binary
 
@@ -30,6 +32,9 @@ clean:
 buildkoopa: build testkoopa
 
 buildriscv: build testriscv
+
+docker:
+    docker run -it --rm -v E:/courses/pku-minic:/root/compiler maxxing/compiler-dev
 
 
 autotest-riscv:

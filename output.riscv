@@ -1,0 +1,7 @@
+    .text
+    .globl main
+main:
+    xor x0,x0,x0
+    seqz x0,x0
+    mv a0, x0
+    ret

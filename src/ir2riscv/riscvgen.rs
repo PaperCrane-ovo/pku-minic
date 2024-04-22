@@ -12,6 +12,7 @@ pub trait GenerateAsm {
 
 }
 pub trait GenerateAsmValue{
+    fn bin_reg_alloc(&self,lhs: &str, rhs: &str) -> String;
     fn load_imm(&self, asm: &mut String, dfg: &DataFlowGraph)-> Option<&str>{None}
     fn generate(&self,asm: &mut String,dfg: &DataFlowGraph){}
     fn load_value(&self,asm: &mut String,dfg: &DataFlowGraph) -> Option<&str>{
@@ -140,46 +141,43 @@ impl GenerateAsmValue for Value{
 
                 // 比较复杂的情况，无法直接生成
                 if op_to_str(op) == "unknown" {
+                    let reg = self.bin_reg_alloc(lhs, rhs);
                     match op {
                         BinaryOp::Eq => {
-                            asm.push_str(&format!("    xor {},{},{}\n",unsafe{temp_reg[CUR_REG as usize]},lhs,rhs));
-                            asm.push_str(&format!("    seqz {},{}\n",unsafe{temp_reg[CUR_REG as usize]},unsafe{temp_reg[CUR_REG as usize]}));
+                            asm.push_str(&format!("    xor {},{},{}\n",reg,lhs,rhs));
+                            asm.push_str(&format!("    seqz {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, temp_reg[CUR_REG as usize].to_string());
-                                CUR_REG += 1;
+                                reg_cache.insert(*self, reg);
                             }
                         }
                         BinaryOp::NotEq => {
-                            asm.push_str(&format!("    xor {},{},{}\n",unsafe{temp_reg[CUR_REG as usize]},lhs,rhs));
-                            asm.push_str(&format!("    snez {},{}\n",unsafe{temp_reg[CUR_REG as usize]},unsafe{temp_reg[CUR_REG as usize]}));
+                            asm.push_str(&format!("    xor {},{},{}\n",reg,lhs,rhs));
+                            asm.push_str(&format!("    snez {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, temp_reg[CUR_REG as usize].to_string());
-                                CUR_REG += 1;
+                                reg_cache.insert(*self, reg);
                             }
                         }
                         BinaryOp::Le => {
-                            asm.push_str(&format!("    sgt {},{},{}\n",unsafe{temp_reg[CUR_REG as usize]},lhs,rhs));
-                            asm.push_str(&format!("    seqz {},{}\n",unsafe{temp_reg[CUR_REG as usize]},unsafe{temp_reg[CUR_REG as usize]}));
+                            asm.push_str(&format!("    sgt {},{},{}\n",reg,lhs,rhs));
+                            asm.push_str(&format!("    seqz {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, temp_reg[CUR_REG as usize].to_string());
-                                CUR_REG += 1;
+                                reg_cache.insert(*self, reg);
                             }
                         }
                         BinaryOp::Ge => {
-                            asm.push_str(&format!("    slt {},{},{}\n",unsafe{temp_reg[CUR_REG as usize]},lhs,rhs));
-                            asm.push_str(&format!("    seqz {},{}\n",unsafe{temp_reg[CUR_REG as usize]},unsafe{temp_reg[CUR_REG as usize]}));
+                            asm.push_str(&format!("    slt {},{},{}\n",reg,lhs,rhs));
+                            asm.push_str(&format!("    seqz {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, temp_reg[CUR_REG as usize].to_string());
-                                CUR_REG += 1;
+                                reg_cache.insert(*self, reg);
                             }
                         }
                         _ => {}
                     }
                 }else{
-                    asm.push_str(&format!("    {} {},{},{}\n",op_to_str(op),unsafe{temp_reg[CUR_REG as usize]},lhs,rhs));
+                    let reg = self.bin_reg_alloc(lhs, rhs);
+                    asm.push_str(&format!("    {} {},{},{}\n",op_to_str(op),reg,lhs,rhs));
                     unsafe{
-                        reg_cache.insert(*self, temp_reg[CUR_REG as usize].to_string());
-                        CUR_REG += 1;
+                        reg_cache.insert(*self, reg);
                     }
                 }
             
@@ -224,6 +222,26 @@ impl GenerateAsmValue for Value{
             }
         }
         None
+    }
+    fn bin_reg_alloc(&self,lhs: &str, rhs: &str) -> String {
+        // 如果有一个是x0，就返回另一个
+        if rhs == "x0" && lhs == "x0" {
+            unsafe {
+                CUR_REG += 1;
+                return temp_reg[CUR_REG as usize-1].to_string();
+            }
+        }        
+        else if rhs == "x0" {
+            return lhs.to_string();
+        }
+        else if lhs == "x0" {
+            return rhs.to_string();
+        }
+        else {
+            return lhs.to_string();
+        }
+
+
     }
     
 }
