@@ -1,3 +1,5 @@
 /target
 *.txt
 .vscode
+username.txt
+password.txt
