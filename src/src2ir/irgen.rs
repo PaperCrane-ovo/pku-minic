@@ -47,8 +47,22 @@ impl Block {
             .basic_block(Some("%entry".into()));
         func_data.layout_mut().bbs_mut().extend([entry]);
 
-        for item in self.items {
-            item.generate_program(func_data, symtable, entry);
+        // for item in self.items {
+        //     item.generate_program(func_data, symtable, entry);
+        // }
+        assert_eq!(self.items.len(), 1);
+        let item = &self.items[0];
+        if let BlockItem::Stmt { stmt } = item {
+            if let Stmt::Return(r) = &stmt.node{
+                let ret_val = r.clone().calculate_const(func_data, symtable, entry);
+                let ret_val = func_data.dfg_mut().new_value().integer(ret_val);
+                let ret = func_data.dfg_mut().new_value().ret(Some(ret_val));
+                func_data
+                    .layout_mut()
+                    .bb_mut(entry)
+                    .insts_mut()
+                    .push_key_back(ret);
+            }
         }
     }
 }
@@ -69,6 +83,7 @@ impl BlockItem {
             }
         }
     }
+
 }
 
 impl Decl {
@@ -230,6 +245,9 @@ impl Stmt {
 impl Return {
     pub fn generate_program(self,symtable:&mut SymTable, func_data: &mut FunctionData, block: BasicBlock) -> Value {
         self.exp.generate_program(symtable,func_data, block)
+    }
+    pub fn calculate_const(self,func_data: &mut FunctionData, symtable: &mut SymTable, block: BasicBlock) -> i32 {
+        self.exp.calculate_const(func_data,symtable,block)
     }
 }
 
