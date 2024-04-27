@@ -28,7 +28,7 @@ Block: Span<Block> = {
     <start:@L> "{" <items: BlockItem*> "}" <end:@R> => {
         let mut has_return:bool = false;
         let mut temp = Vec::<BlockItem>::new();
-        // 去除第一个之后的return
+        // 去除第一个return之后的所有stmt
         for item in items {
             match item {
                 BlockItem::Stmt{ref stmt} => {
@@ -39,7 +39,11 @@ Block: Span<Block> = {
                         has_return = true;
                     }
                 },
-                _ => {}
+                _ => {
+                    if has_return {
+                        continue;
+                    }
+                }
             }
             temp.push(item.clone());
         }
