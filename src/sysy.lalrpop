@@ -18,16 +18,63 @@ pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
 
 FuncDef: FuncDef = {
   <func_type: FuncType> <ident: Ident> "(" ")" <block: Block> => {
-    FuncDef { <> }
+    FuncDef { ident, block, func_type }
   }
 }
 
-FuncType: FuncType = "int" => FuncType::Int;
+FuncType: Span<FuncType> = <start:@L> "int" <end:@R> => FuncType::Int.into_span(start, end);
 
-Block: Block = "{" <stmt: Stmt> "}" => Block { <> };
+Block: Span<Block> = <start:@L> "{" <items: BlockItem*> "}" <end:@R> => Block { items }.into_span(start, end);
 
-Stmt: Stmt = {
-    "return" <exp: Exp> ";" => Stmt::Return(Return{<>}),
+BlockItem: BlockItem = {
+  <stmt: Stmt> => BlockItem::Stmt{<>},
+  <decl: Decl> => BlockItem::Decl{<>},
+};
+
+Decl: Decl = {
+    <var_decl: VarDecl> => Decl::Var(<>),
+    <const_decl: ConstDecl> => Decl::Const(<>),
+}
+
+BType: Span<BType> = <start:@L> "int" <end:@R> => BType::Int.into_span(start, end);
+
+VarDecl: Span<VarDecl> = {
+    <start:@L> <ty:BType> <mut defs:(<VarDef> ",")*> <def: VarDef> ";" <end:@R> => {
+        defs.push(def);
+        VarDecl { ty, defs }.into_span(start, end)
+    }
+}
+
+VarDef : VarDef = {
+    <ident: Ident> => VarDef{ident:ident, init:None},
+    <ident: Ident> "=" <init:InitVal> => VarDef{ident:ident, init:Some(init)},
+}
+
+InitVal: InitVal = {
+    <exp:Exp> => InitVal{<>}
+}
+
+ConstDecl: Span<ConstDecl> = {
+    <start:@L> "const" <ty:BType> <mut defs:(<ConstDef> ",")*> <def: ConstDef> ";" <end:@R> => {
+        defs.push(def);
+        ConstDecl { ty, defs }.into_span(start, end)
+    }
+}
+
+ConstDef : ConstDef = {
+    <ident: Ident> "=" <exp:ConstExp> => ConstDef{<>},
+}
+
+ConstExp: ConstExp = {
+    <exp:Exp> => ConstExp{<>}
+}
+
+
+
+
+Stmt: Span<Stmt> = {
+    <start:@L> "return" <exp: Exp> ";" <end:@R> => Stmt::Return(Return{exp:exp}).into_span(start, end),
+    <start:@L> <ident:Ident> "=" <exp: Exp> ";" <end:@R> => Stmt::Assign{ident:ident, exp:exp}.into_span(start, end),
 };
 
 Exp: Exp = <lor_exp:LOrExp> => <>;
@@ -35,6 +82,7 @@ Exp: Exp = <lor_exp:LOrExp> => <>;
 PrimaryExp: Exp = {
     "(" <exp: Exp> ")" => <>,
     <num:Number> => Exp::Number(<>),
+    Ident => Exp::LVar(<>),
 }
 
 
@@ -44,10 +92,10 @@ UnaryExp: Exp = {
     
 }
 
-UnaryOp: MyUnaryOp = {
-    "-" => MyUnaryOp::Neg,
-    "!" => MyUnaryOp::Not,
-    "+" => MyUnaryOp::Pos,
+UnaryOp: Span<MyUnaryOp> = {
+    <start:@L> "-" <end:@R> => MyUnaryOp::Neg.into_span(start, end),
+    <start:@L> "!" <end:@R> => MyUnaryOp::Not.into_span(start, end),
+    <start:@L> "+" <end:@R> => MyUnaryOp::Pos.into_span(start, end),
 }
 
 MulExp: Exp = {
@@ -55,10 +103,10 @@ MulExp: Exp = {
     <mul_exp: MulExp> <mul_op:MulOp> <unary_exp: UnaryExp> => Exp::BinaryExp{op:mul_op, exp1:Box::new(mul_exp), exp2:Box::new(unary_exp)},
 }
 
-MulOp: MyBinaryOp = {
-    "*" => MyBinaryOp::Mul,
-    "/" => MyBinaryOp::Div,
-    "%" => MyBinaryOp::Mod,
+MulOp: Span<MyBinaryOp> = {
+    <start:@L> "*" <end:@R> => MyBinaryOp::Mul.into_span(start, end),
+    <start:@L> "/" <end:@R> => MyBinaryOp::Div.into_span(start, end),
+    <start:@L> "%" <end:@R> => MyBinaryOp::Mod.into_span(start, end),
 }
 
 AddExp: Exp = {
@@ -66,9 +114,9 @@ AddExp: Exp = {
     <add_exp: AddExp> <add_op:AddOp> <mul_exp: MulExp> => Exp::BinaryExp{op:add_op, exp1:Box::new(add_exp), exp2:Box::new(mul_exp)},
 }
 
-AddOp: MyBinaryOp = {
-    "+" => MyBinaryOp::Add,
-    "-" => MyBinaryOp::Sub,
+AddOp: Span<MyBinaryOp> = {
+    <start:@L> "+" <end:@R> => MyBinaryOp::Add.into_span(start, end),
+    <start:@L> "-" <end:@R> => MyBinaryOp::Sub.into_span(start, end),
 }
 
 RelExp: Exp = {
@@ -76,11 +124,11 @@ RelExp: Exp = {
     <rel_exp: RelExp> <rel_op:RelOp> <add_exp: AddExp> => Exp::BinaryExp{op:rel_op, exp1:Box::new(rel_exp), exp2:Box::new(add_exp)},
 }
 
-RelOp: MyBinaryOp = {
-    "<" => MyBinaryOp::Lt,
-    "<=" => MyBinaryOp::Le,
-    ">" => MyBinaryOp::Gt,
-    ">=" => MyBinaryOp::Ge,
+RelOp: Span<MyBinaryOp> = {
+    <start:@L> "<" <end:@R> => MyBinaryOp::Lt.into_span(start, end),
+    <start:@L> "<=" <end:@R> => MyBinaryOp::Le.into_span(start, end),
+    <start:@L> ">" <end:@R> => MyBinaryOp::Gt.into_span(start, end),
+    <start:@L> ">=" <end:@R> => MyBinaryOp::Ge.into_span(start, end),
 }
 
 EqExp: Exp = {
@@ -88,29 +136,30 @@ EqExp: Exp = {
     <eq_exp: EqExp> <eq_op:EqOp> <rel_exp: RelExp> => Exp::BinaryExp{op:eq_op, exp1:Box::new(eq_exp), exp2:Box::new(rel_exp)},
 }
 
-EqOp: MyBinaryOp = {
-    "==" => MyBinaryOp::Eq,
-    "!=" => MyBinaryOp::Ne,
+EqOp: Span<MyBinaryOp> = {
+    <start:@L> "==" <end:@R> => MyBinaryOp::Eq.into_span(start, end),
+    <start:@L> "!=" <end:@R> => MyBinaryOp::Ne.into_span(start, end),
 }
 
 LAndExp: Exp = {
     <eq_exp: EqExp> => <>,
-    <land_exp: LAndExp> "&&" <eq_exp: EqExp> => Exp::BinaryExp{op: MyBinaryOp::LAnd, exp1:Box::new(land_exp), exp2:Box::new(eq_exp)},
+    <land_exp: LAndExp> <start:@L> "&&" <end:@R> <eq_exp: EqExp> => Exp::BinaryExp{op: MyBinaryOp::LAnd.into_span(start,end), exp1:Box::new(land_exp), exp2:Box::new(eq_exp)},
 }
 
 LOrExp: Exp = {
     <land_exp: LAndExp> => <>,
-    <lor_exp: LOrExp> "||" <land_exp: LAndExp> => Exp::BinaryExp{op: MyBinaryOp::LOr, exp1:Box::new(lor_exp), exp2:Box::new(land_exp)},
+    <lor_exp: LOrExp> <start:@L> "||" <end:@R> <land_exp: LAndExp> => Exp::BinaryExp{op: MyBinaryOp::LOr.into_span(start,end), exp1:Box::new(lor_exp), exp2:Box::new(land_exp)},
 }
 
-Number: i32 = <num: IntConst> => <>;
+Number: Span<i32> = <start:@L> <num:IntConst> <end:@R> => num.into_span(start, end);
+
 
 
 
 // 如果匹配到标识符, 就返回这个字符串
 // 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
 // 关于尖括号到底代表什么, 请 RTFM
-Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
+Ident: Span<String> = <start:@L> <ident: r"[_a-zA-Z][_a-zA-Z0-9]*"> <end:@R> => ident.to_string().into_span(start, end);
 
 // 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
 IntConst: i32 = {
