@@ -42,6 +42,7 @@ Block: Span<Block> = {
                 _ => {
                     if has_return {
                         continue;
+                    }
                 }
             }
             temp.push(item.clone());
