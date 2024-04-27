@@ -24,7 +24,28 @@ FuncDef: FuncDef = {
 
 FuncType: Span<FuncType> = <start:@L> "int" <end:@R> => FuncType::Int.into_span(start, end);
 
-Block: Span<Block> = <start:@L> "{" <items: BlockItem*> "}" <end:@R> => Block { items }.into_span(start, end);
+Block: Span<Block> = {
+    <start:@L> "{" <items: BlockItem*> "}" <end:@R> => {
+        let mut has_return:bool = false;
+        let mut temp = Vec::<BlockItem>::new();
+        // 去除第一个之后的return
+        for item in items {
+            match item {
+                BlockItem::Stmt{ref stmt} => {
+                    if let Stmt::Return(_) = stmt.node {
+                        if has_return {
+                            continue;
+                        }
+                        has_return = true;
+                    }
+                },
+                _ => {}
+            }
+            temp.push(item.clone());
+        }
+        Block { items: temp }.into_span(start, end)
+    }
+}
 
 BlockItem: BlockItem = {
   <stmt: Stmt> => BlockItem::Stmt{<>},
