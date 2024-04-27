@@ -37,6 +37,10 @@ Block: Span<Block> = {
                             continue;
                         }
                         has_return = true;
+                    }else{
+                        if has_return {
+                            continue;
+                        }
                     }
                 },
                 _ => {
