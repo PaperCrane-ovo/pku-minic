@@ -123,7 +123,7 @@ impl VarDef {
             .layout_mut()
             .bb_mut(block)
             .insts_mut()
-            .push_key_back(var);
+            .push_key_back(var).unwrap();
 
         if let Some(init) = self.init {
             let init_val = init.generate_program(symtable, func_data, block);
@@ -132,7 +132,7 @@ impl VarDef {
                 .layout_mut()
                 .bb_mut(block)
                 .insts_mut()
-                .push_key_back(store);
+                .push_key_back(store).unwrap();
         }
 
         symtable.insert(self.ident.node, Symbol::Var(var))
@@ -166,7 +166,7 @@ impl ConstDecl {
 impl ConstDef{
     pub fn generate_program(
         self,
-        ty: &BType,
+        _ty: &BType,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: BasicBlock,
@@ -204,7 +204,7 @@ impl Stmt {
                     .layout_mut()
                     .bb_mut(block)
                     .insts_mut()
-                    .push_key_back(ret);
+                    .push_key_back(ret).unwrap();
             }
             Stmt::Assign { ident, exp } => {
                 let var = symtable.get(&ident.node);
@@ -221,7 +221,7 @@ impl Stmt {
                     .layout_mut()
                     .bb_mut(block)
                     .insts_mut()
-                    .push_key_back(store);
+                    .push_key_back(store).unwrap();
             }
         }
     }
@@ -251,7 +251,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(neg);
+                            .push_key_back(neg).unwrap();
                         neg
                     }
                     MyUnaryOp::Not => {
@@ -265,7 +265,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(not);
+                            .push_key_back(not).unwrap();
                         not
                     }
                     MyUnaryOp::Pos => expr,
@@ -285,7 +285,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(add);
+                            .push_key_back(add).unwrap();
                         add
                     }
                     MyBinaryOp::Sub => {
@@ -298,7 +298,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(sub);
+                            .push_key_back(sub).unwrap();
                         sub
                     }
                     MyBinaryOp::Mul => {
@@ -311,7 +311,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(mul);
+                            .push_key_back(mul).unwrap();
                         mul
                     }
                     MyBinaryOp::Div => {
@@ -324,7 +324,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(div);
+                            .push_key_back(div).unwrap();
                         div
                     }
                     MyBinaryOp::Mod => {
@@ -337,7 +337,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(_mod);
+                            .push_key_back(_mod).unwrap();
                         _mod
                     }
                     MyBinaryOp::Eq => {
@@ -349,7 +349,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(eq);
+                            .push_key_back(eq).unwrap();
                         eq
                     }
                     MyBinaryOp::Ne => {
@@ -362,7 +362,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(ne);
+                            .push_key_back(ne).unwrap();
                         ne
                     }
                     MyBinaryOp::Lt => {
@@ -374,7 +374,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(lt);
+                            .push_key_back(lt).unwrap();
                         lt
                     }
                     MyBinaryOp::Gt => {
@@ -386,7 +386,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(gt);
+                            .push_key_back(gt).unwrap();
                         gt
                     }
                     MyBinaryOp::Le => {
@@ -398,7 +398,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(le);
+                            .push_key_back(le).unwrap();
                         le
                     }
                     MyBinaryOp::Ge => {
@@ -410,7 +410,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(ge);
+                            .push_key_back(ge).unwrap();
                         ge
                     }
                     // 逻辑运算需要先转为0和1然后再进行运算
@@ -434,17 +434,17 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(and1);
+                            .push_key_back(and1).unwrap();
                         func_data
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(and2);
+                            .push_key_back(and2).unwrap();
                         func_data
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(and);
+                            .push_key_back(and).unwrap();
                         and
                     }
                     MyBinaryOp::LOr => {
@@ -467,17 +467,17 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(or1);
+                            .push_key_back(or1).unwrap();
                         func_data
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(or2);
+                            .push_key_back(or2).unwrap();
                         func_data
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(or);
+                            .push_key_back(or).unwrap();
                         or
                     }
                 }
@@ -493,7 +493,7 @@ impl Exp {
                             .layout_mut()
                             .bb_mut(block)
                             .insts_mut()
-                            .push_key_back(load);
+                            .push_key_back(load).unwrap();
                         load
                     }
                     Some(Symbol::Const(n))=>func_data.dfg_mut().new_value().integer(*n),

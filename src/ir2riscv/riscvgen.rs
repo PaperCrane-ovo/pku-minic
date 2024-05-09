@@ -3,27 +3,23 @@ use koopa::ir::{dfg::DataFlowGraph, BinaryOp, FunctionData, Program, Value, Valu
 
 use crate::utils::is_const;
 
-use super::register::{reg_cache, temp_reg, CUR_REG};
+use super::register::{REG_CACHE, TEMP_REG, CUR_REG};
 
 
 // 比较丑陋的实现：给koopa扩展特征，函数签名不同需要不同的函数。
 pub trait GenerateAsm {
-    fn generate (&self,asm: &mut String){}
+    fn generate (&self,_asm: &mut String){}
 
 }
 pub trait GenerateAsmValue{
     fn bin_reg_alloc(&self,lhs: &str, rhs: &str) -> String;
-    fn load_imm(&self, asm: &mut String, dfg: &DataFlowGraph)-> Option<&str>{None}
-    fn generate(&self,asm: &mut String,dfg: &DataFlowGraph){}
-    fn load_value(&self,asm: &mut String,dfg: &DataFlowGraph) -> Option<&str>{
+    fn load_imm(&self, _asm: &mut String,_dfg: &DataFlowGraph)-> Option<&str>{None}
+    fn generate(&self,_asm: &mut String,_dfg: &DataFlowGraph){}
+    fn load_value(&self,_asm: &mut String,_dfg: &DataFlowGraph) -> Option<&str>{
         None
     }
 }
 
-pub trait GenerateAsmValueData{
-    fn generate(&self,asm: &mut String){}
-
-}
 
 
 
@@ -44,7 +40,7 @@ impl GenerateAsm for FunctionData{
         asm.push_str(&format!("{}:\n", name));
         
         let dfg = self.dfg();
-        for (&bb,node) in self.layout().bbs(){
+        for (&_bb,node) in self.layout().bbs(){
             // dbg!(node.insts().len());
             // dbg!(dfg.values());
             for &inst in node.insts().keys(){
@@ -106,7 +102,7 @@ impl GenerateAsmValue for Value{
     fn generate (&self,asm: &mut String,dfg: &DataFlowGraph) {
         let value_data = dfg.value(*self);
         match value_data.kind(){
-            ValueKind::Integer(i) => {
+            ValueKind::Integer(_) => {
                 unreachable!("Integer value should not be generated directly in lv3.");
                 //asm.push_str(&format!("    li a0, {}\n", i.value()));
             }
@@ -115,7 +111,7 @@ impl GenerateAsmValue for Value{
                     // dbg!("ret value entered\n",asm.as_str());
 
                     // ret_value.generate(asm,dfg);
-                    let value_reg = unsafe{reg_cache.get(&ret_value)};
+                    let value_reg = unsafe{REG_CACHE.get(&ret_value)};
                     if let Some(value_reg) = value_reg{
                         asm.push_str(&format!("    mv a0, {}\n",value_reg));
                     }else{
@@ -147,28 +143,28 @@ impl GenerateAsmValue for Value{
                             asm.push_str(&format!("    xor {},{},{}\n",reg,lhs,rhs));
                             asm.push_str(&format!("    seqz {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, reg);
+                                REG_CACHE.insert(*self, reg);
                             }
                         }
                         BinaryOp::NotEq => {
                             asm.push_str(&format!("    xor {},{},{}\n",reg,lhs,rhs));
                             asm.push_str(&format!("    snez {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, reg);
+                                REG_CACHE.insert(*self, reg);
                             }
                         }
                         BinaryOp::Le => {
                             asm.push_str(&format!("    sgt {},{},{}\n",reg,lhs,rhs));
                             asm.push_str(&format!("    seqz {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, reg);
+                                REG_CACHE.insert(*self, reg);
                             }
                         }
                         BinaryOp::Ge => {
                             asm.push_str(&format!("    slt {},{},{}\n",reg,lhs,rhs));
                             asm.push_str(&format!("    seqz {},{}\n",reg,reg));
                             unsafe{
-                                reg_cache.insert(*self, reg);
+                                REG_CACHE.insert(*self, reg);
                             }
                         }
                         _ => {}
@@ -177,7 +173,7 @@ impl GenerateAsmValue for Value{
                     let reg = self.bin_reg_alloc(lhs, rhs);
                     asm.push_str(&format!("    {} {},{},{}\n",op_to_str(op),reg,lhs,rhs));
                     unsafe{
-                        reg_cache.insert(*self, reg);
+                        REG_CACHE.insert(*self, reg);
                     }
                 }
             
@@ -196,14 +192,14 @@ impl GenerateAsmValue for Value{
                 }
 
 
-                asm.push_str(&format!("    li {}, {}\n", unsafe{temp_reg[CUR_REG as usize]}, i.value()));
+                asm.push_str(&format!("    li {}, {}\n", unsafe{TEMP_REG[CUR_REG as usize]}, i.value()));
 
                 unsafe{
-                    reg_cache.insert(*self, temp_reg[CUR_REG as usize].to_string());
+                    REG_CACHE.insert(*self, TEMP_REG[CUR_REG as usize].to_string());
                     CUR_REG += 1;
                 }
 
-                Some(unsafe{reg_cache.get(self).unwrap()})
+                Some(unsafe{REG_CACHE.get(self).unwrap()})
 
             }
             _ => None
@@ -215,7 +211,7 @@ impl GenerateAsmValue for Value{
             return self.load_imm(asm,dfg);
         }else{
             let reg = unsafe{
-                reg_cache.get(self)
+                REG_CACHE.get(self)
             };
             if let Some(reg) = reg{
                 return Some(&reg[0..]);
@@ -228,7 +224,7 @@ impl GenerateAsmValue for Value{
         if rhs == "x0" && lhs == "x0" {
             unsafe {
                 CUR_REG += 1;
-                return temp_reg[CUR_REG as usize-1].to_string();
+                return TEMP_REG[CUR_REG as usize-1].to_string();
             }
         }        
         else if rhs == "x0" {

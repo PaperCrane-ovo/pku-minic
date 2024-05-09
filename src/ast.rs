@@ -215,16 +215,16 @@ pub enum Exp{
 impl Spanned for Exp{
     fn start_pos(&self)->usize{
         match self{
-            Exp::UnaryExp{op,exp}=>op.start_pos(),
-            Exp::BinaryExp{op,exp1,exp2}=>exp1.start_pos(),
+            Exp::UnaryExp{op,exp: _}=>op.start_pos(),
+            Exp::BinaryExp{op: _,exp1,exp2:_}=>exp1.start_pos(),
             Exp::Number(num)=>num.start_pos(),
             Exp::LVar(ident)=>ident.start_pos(),
         }
     }
     fn end_pos(&self)->usize{
         match self{
-            Exp::UnaryExp{op,exp}=>exp.end_pos(),
-            Exp::BinaryExp{op,exp1,exp2}=>exp2.end_pos(),
+            Exp::UnaryExp{op: _,exp}=>exp.end_pos(),
+            Exp::BinaryExp{op: _,exp1: _,exp2}=>exp2.end_pos(),
             Exp::Number(num)=>num.end_pos(),
             Exp::LVar(ident)=>ident.end_pos(),
         }
