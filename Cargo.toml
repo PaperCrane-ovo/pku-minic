@@ -11,4 +11,5 @@ lalrpop = "0.20.0"
 [dependencies]
 koopa = "0.0.7"
 lalrpop-util = { version = "0.20.0", features = ["lexer"] }
+miette = "7.2.0"
 once_cell = "1.8.0"
