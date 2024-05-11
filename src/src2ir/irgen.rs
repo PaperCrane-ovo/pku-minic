@@ -1,6 +1,6 @@
 use koopa::ir::{
     builder::{BasicBlockBuilder, LocalInstBuilder, ValueBuilder},
-    BasicBlock, BinaryOp, FunctionData, Program, Type, Value,
+    BasicBlock, BinaryOp, FunctionData, Program, Type, Value, ValueKind,
 };
 
 use crate::ast::*;
@@ -35,6 +35,31 @@ impl FuncDef {
         func_data.layout_mut().bbs_mut().extend([entry]);
 
         self.block.node.generate_program(func_data, symtable, entry);
+
+        // a temporary fix to remove all insts after ret
+        let dfg = func_data.dfg();
+
+
+        let layout = func_data.layout(); // 获取 func_data 的可变引用
+        let insts = layout.bbs().node(&entry).unwrap().insts();
+
+        let mut it: Option<Value> = None;
+
+        for i in insts.iter() {
+            match dfg.value(*i.0).kind() {
+                ValueKind::Return(_) => {
+                    it = Some(*i.0);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        let insts = func_data.layout_mut().bb_mut(entry).insts_mut();
+
+        while *insts.back_key().unwrap() != it.unwrap() {
+            insts.pop_back();
+        }
     }
 }
 
@@ -47,7 +72,12 @@ impl FuncType {
 }
 
 impl Block {
-    pub fn generate_program(self, func_data: &mut FunctionData, symtable: &mut SymTable, entry: BasicBlock) {
+    pub fn generate_program(
+        self,
+        func_data: &mut FunctionData,
+        symtable: &mut SymTable,
+        entry: BasicBlock,
+    ) {
         dbg!("enter a block");
         symtable.push();
 
@@ -233,7 +263,7 @@ impl Stmt {
                     .push_key_back(store)
                     .unwrap();
             }
-            Stmt::Block { block:_block } => {
+            Stmt::Block { block: _block } => {
                 _block.node.generate_program(func_data, symtable, block);
             }
             Stmt::Exp { exp } => {
