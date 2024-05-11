@@ -26,7 +26,32 @@ FuncType: Span<FuncType> = <start:@L> "int" <end:@R> => FuncType::Int.into_span(
 
 Block: Span<Block> = {
     <start:@L> "{" <items: BlockItem*> "}" <end:@R> => {
-        Block { items: items }.into_span(start, end)
+        let mut has_return:bool = false;
+        let mut temp = Vec::<BlockItem>::new();
+        // 去除第一个return之后的所有stmt
+        for item in items {
+            match item {
+                BlockItem::Stmt{ref stmt} => {
+                    if let Stmt::Return(_) = stmt.node {
+                        if has_return {
+                            continue;
+                        }
+                        has_return = true;
+                    }else{
+                        if has_return {
+                            continue;
+                        }
+                    }
+                },
+                _ => {
+                    if has_return {
+                        continue;
+                    }
+                }
+            }
+            temp.push(item.clone());
+        }
+        Block { items: temp }.into_span(start, end)
     }
 }
 
