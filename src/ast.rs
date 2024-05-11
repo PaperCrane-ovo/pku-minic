@@ -37,7 +37,7 @@ impl Spanned for FuncDef{
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum FuncType {
     Int,
 }
@@ -45,7 +45,7 @@ pub enum FuncType {
 impl NonSpanned for FuncType{}
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Block{
     pub items: Vec<BlockItem>,
 }
@@ -185,6 +185,12 @@ pub enum Stmt {
         ident: Span<String>,
         exp: Exp,
     },
+    Block{
+        block: Span<Block>,
+    },
+    Exp{
+        exp:Option<Exp>
+    }
 }
 
 impl NonSpanned for Stmt{}

@@ -39,6 +39,7 @@ impl <K:Eq + Hash,V> ChainMap<K,V>{
     fn pop(&mut self){
         self.maps.pop();
     }
+    
 }
 
 impl SymTable{
@@ -54,5 +55,14 @@ impl SymTable{
     }
     pub fn get(&self,name:&String)->Option<&Symbol>{
         self.table.get(name)
+    }
+    pub fn contains(&self,name:&String)->bool{
+        self.table.get(name).is_some()
+    }
+    pub fn push(&mut self){
+        self.table.push();
+    }
+    pub fn pop(&mut self){
+        self.table.pop();
     }
 }

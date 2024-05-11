@@ -27,7 +27,14 @@ impl FuncDef {
             self.func_type.node.generate_program(),
         ));
         let func_data = program.func_mut(func);
-        self.block.node.generate_program(func_data, symtable);
+
+        let entry = func_data
+            .dfg_mut()
+            .new_bb()
+            .basic_block(Some("%entry".into()));
+        func_data.layout_mut().bbs_mut().extend([entry]);
+
+        self.block.node.generate_program(func_data, symtable, entry);
     }
 }
 
@@ -40,16 +47,16 @@ impl FuncType {
 }
 
 impl Block {
-    pub fn generate_program(self, func_data: &mut FunctionData, symtable: &mut SymTable) {
-        let entry = func_data
-            .dfg_mut()
-            .new_bb()
-            .basic_block(Some("%entry".into()));
-        func_data.layout_mut().bbs_mut().extend([entry]);
+    pub fn generate_program(self, func_data: &mut FunctionData, symtable: &mut SymTable, entry: BasicBlock) {
+        dbg!("enter a block");
+        symtable.push();
 
         for item in self.items {
             item.generate_program(func_data, symtable, entry);
         }
+
+        symtable.pop();
+        dbg!("exit a block");
     }
 }
 
@@ -225,6 +232,14 @@ impl Stmt {
                     .insts_mut()
                     .push_key_back(store)
                     .unwrap();
+            }
+            Stmt::Block { block:_block } => {
+                _block.node.generate_program(func_data, symtable, block);
+            }
+            Stmt::Exp { exp } => {
+                if let Some(exp) = exp {
+                    exp.generate_program(symtable, func_data, block);
+                }
             }
         }
     }
