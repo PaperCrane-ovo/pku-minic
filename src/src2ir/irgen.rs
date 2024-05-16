@@ -284,7 +284,7 @@ impl Stmt {
                 func_data
                     .layout_mut()
                     .bbs_mut()
-                    .extend([then_block, else_block]);
+                    .extend([then_block, else_block, merge_block]);
                 // if cond
                 let br = func_data
                     .dfg_mut()
@@ -355,11 +355,7 @@ impl Stmt {
 
 
                 // merge
-                if !(else_ret && then_ret){
-                    func_data.layout_mut().bbs_mut().extend([merge_block]);
-                    *block = merge_block;
-
-                }
+                *block = merge_block;
                 
             }
         }

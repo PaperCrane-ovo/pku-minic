@@ -3,9 +3,8 @@ int main() {
   int b = 0;
   if (a || b){
     a = 3;
-    return a;
   } else {
     a = 4;
-    return a;
   }
+  return a;
 }

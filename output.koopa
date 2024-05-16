@@ -13,11 +13,13 @@ fun @main(): i32 {
 
 %7:
   store 3, %0
-  %9 = load %0
-  ret %9
+  jump %9
 
 %8:
   store 4, %0
+  jump %9
+
+%9:
   %10 = load %0
   ret %10
 }
