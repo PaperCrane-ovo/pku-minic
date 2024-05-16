@@ -63,6 +63,18 @@ impl FuncDef {
         // while *insts.back_key().unwrap() != it.unwrap() {
         //     insts.pop_back();
         // }
+        let ret = func_data.dfg_mut().new_value().ret(None);
+        let mut vector = Vec::new();
+        let layout = func_data.layout_mut();
+        let blocks = layout.bbs_mut().iter();
+        for block in blocks {
+            if block.1.insts().is_empty() {
+                vector.push(*block.0);
+            }
+        }
+        for block in vector {
+            layout.bb_mut(block).insts_mut().push_key_back(ret).unwrap()
+        }
     }
 }
 
@@ -353,10 +365,8 @@ impl Stmt {
                         .extend([br]);
                 }
 
-
                 // merge
                 *block = merge_block;
-                
             }
         }
     }
