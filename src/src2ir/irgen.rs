@@ -34,32 +34,35 @@ impl FuncDef {
             .basic_block(Some("%entry".into()));
         func_data.layout_mut().bbs_mut().extend([entry]);
 
-        self.block.node.generate_program(func_data, symtable, entry);
+        let mut block = entry;
+
+        self.block
+            .node
+            .generate_program(func_data, symtable, &mut block);
 
         // a temporary fix to remove all insts after ret
-        let dfg = func_data.dfg();
+        // let dfg = func_data.dfg();
 
+        // let layout = func_data.layout(); // 获取 func_data 的可变引用
+        // let insts = layout.bbs().node(&entry).unwrap().insts();
 
-        let layout = func_data.layout(); // 获取 func_data 的可变引用
-        let insts = layout.bbs().node(&entry).unwrap().insts();
+        // let mut it: Option<Value> = None;
 
-        let mut it: Option<Value> = None;
+        // for i in insts.iter() {
+        //     match dfg.value(*i.0).kind() {
+        //         ValueKind::Return(_) => {
+        //             it = Some(*i.0);
+        //             break;
+        //         }
+        //         _ => {}
+        //     }
+        // }
 
-        for i in insts.iter() {
-            match dfg.value(*i.0).kind() {
-                ValueKind::Return(_) => {
-                    it = Some(*i.0);
-                    break;
-                }
-                _ => {}
-            }
-        }
+        // let insts = func_data.layout_mut().bb_mut(entry).insts_mut();
 
-        let insts = func_data.layout_mut().bb_mut(entry).insts_mut();
-
-        while *insts.back_key().unwrap() != it.unwrap() {
-            insts.pop_back();
-        }
+        // while *insts.back_key().unwrap() != it.unwrap() {
+        //     insts.pop_back();
+        // }
     }
 }
 
@@ -76,7 +79,7 @@ impl Block {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        entry: BasicBlock,
+        entry: &mut BasicBlock,
     ) {
         dbg!("enter a block");
         symtable.push();
@@ -95,7 +98,7 @@ impl BlockItem {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) {
         match self {
             BlockItem::Decl { decl } => {
@@ -113,7 +116,7 @@ impl Decl {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) {
         match self {
             Decl::Var(var_decl) => {
@@ -139,7 +142,7 @@ impl VarDecl {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) {
         for def in self.defs {
             def.generate_program(&self.ty.node, func_data, symtable, block);
@@ -153,12 +156,12 @@ impl VarDef {
         ty: &BType,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) {
         let var = func_data.dfg_mut().new_value().alloc(ty.build_ir());
         func_data
             .layout_mut()
-            .bb_mut(block)
+            .bb_mut(*block)
             .insts_mut()
             .push_key_back(var)
             .unwrap();
@@ -168,7 +171,7 @@ impl VarDef {
             let store = func_data.dfg_mut().new_value().store(init_val, var);
             func_data
                 .layout_mut()
-                .bb_mut(block)
+                .bb_mut(*block)
                 .insts_mut()
                 .push_key_back(store)
                 .unwrap();
@@ -183,7 +186,7 @@ impl InitVal {
         self,
         symtable: &mut SymTable,
         func_data: &mut FunctionData,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) -> Value {
         self.exp.generate_program(symtable, func_data, block)
     }
@@ -194,7 +197,7 @@ impl ConstDecl {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) {
         for def in self.defs {
             def.generate_program(&self.ty.node, func_data, symtable, block);
@@ -208,7 +211,7 @@ impl ConstDef {
         _ty: &BType,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) {
         let val = self.exp.calculate_const(func_data, symtable, block);
         symtable.insert(self.ident.node, Symbol::Const(val));
@@ -220,7 +223,7 @@ impl ConstExp {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) -> i32 {
         // TODO: error handling
         self.exp.calculate_const(func_data, symtable, block)
@@ -232,7 +235,7 @@ impl Stmt {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) {
         match self {
             Stmt::Return(r) => {
@@ -240,7 +243,7 @@ impl Stmt {
                 let ret = func_data.dfg_mut().new_value().ret(Some(expr));
                 func_data
                     .layout_mut()
-                    .bb_mut(block)
+                    .bb_mut(*block)
                     .insts_mut()
                     .push_key_back(ret)
                     .unwrap();
@@ -258,7 +261,7 @@ impl Stmt {
 
                 func_data
                     .layout_mut()
-                    .bb_mut(block)
+                    .bb_mut(*block)
                     .insts_mut()
                     .push_key_back(store)
                     .unwrap();
@@ -271,6 +274,90 @@ impl Stmt {
                     exp.generate_program(symtable, func_data, block);
                 }
             }
+            Stmt::If { cond, then, els } => {
+                // 处理if的生成
+                // 为then和else分别创建两个block
+                let cond = cond.generate_program(symtable, func_data, block);
+                let mut then_block = func_data.dfg_mut().new_bb().basic_block(None);
+                let mut else_block = func_data.dfg_mut().new_bb().basic_block(None);
+                let merge_block = func_data.dfg_mut().new_bb().basic_block(None);
+                func_data
+                    .layout_mut()
+                    .bbs_mut()
+                    .extend([then_block, else_block, merge_block]);
+                // if cond
+                let br = func_data
+                    .dfg_mut()
+                    .new_value()
+                    .branch(cond, then_block, else_block);
+                func_data
+                    .layout_mut()
+                    .bb_mut(*block)
+                    .insts_mut()
+                    .extend([br]);
+
+                let mut then_ret = false;
+                let mut else_ret = false;
+
+                // then
+                then.node
+                    .generate_program(func_data, symtable, &mut then_block);
+
+                let dfg = func_data.dfg();
+                let layout = func_data.layout(); // 获取 func_data 的可变引用
+                let insts = layout.bbs().node(&then_block).unwrap().insts();
+
+                for i in insts.iter() {
+                    match dfg.value(*i.0).kind() {
+                        ValueKind::Return(_) => {
+                            then_ret = true;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                if !then_ret {
+                    let br = func_data.dfg_mut().new_value().jump(merge_block);
+                    func_data
+                        .layout_mut()
+                        .bb_mut(then_block)
+                        .insts_mut()
+                        .extend([br]);
+                }
+
+                // else
+                if let Some(els) = els {
+                    els.node
+                        .generate_program(func_data, symtable, &mut else_block);
+                }
+
+                let dfg = func_data.dfg();
+                let layout = func_data.layout(); // 获取 func_data 的可变引用
+                let insts = layout.bbs().node(&else_block).unwrap().insts();
+
+                for i in insts.iter() {
+                    match dfg.value(*i.0).kind() {
+                        ValueKind::Return(_) => {
+                            else_ret = true;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                if !else_ret {
+                    let br = func_data.dfg_mut().new_value().jump(merge_block);
+                    func_data
+                        .layout_mut()
+                        .bb_mut(else_block)
+                        .insts_mut()
+                        .extend([br]);
+                }
+
+
+                // merge
+                *block = merge_block;
+                
+            }
         }
     }
 }
@@ -280,7 +367,7 @@ impl Return {
         self,
         symtable: &mut SymTable,
         func_data: &mut FunctionData,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) -> Value {
         self.exp.generate_program(symtable, func_data, block)
     }
@@ -291,7 +378,7 @@ impl Exp {
         self,
         symtable: &mut SymTable,
         func_data: &mut FunctionData,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) -> Value {
         match self {
             // 一元运算表达式
@@ -307,7 +394,7 @@ impl Exp {
                             .binary(BinaryOp::Sub, zero, expr);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(neg)
                             .unwrap();
@@ -322,7 +409,7 @@ impl Exp {
                             .binary(BinaryOp::Eq, zero, expr);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(not)
                             .unwrap();
@@ -343,7 +430,7 @@ impl Exp {
                                 .binary(BinaryOp::Add, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(add)
                             .unwrap();
@@ -357,7 +444,7 @@ impl Exp {
                                 .binary(BinaryOp::Sub, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(sub)
                             .unwrap();
@@ -371,7 +458,7 @@ impl Exp {
                                 .binary(BinaryOp::Mul, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(mul)
                             .unwrap();
@@ -385,7 +472,7 @@ impl Exp {
                                 .binary(BinaryOp::Div, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(div)
                             .unwrap();
@@ -399,7 +486,7 @@ impl Exp {
                                 .binary(BinaryOp::Mod, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(_mod)
                             .unwrap();
@@ -412,7 +499,7 @@ impl Exp {
                             .binary(BinaryOp::Eq, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(eq)
                             .unwrap();
@@ -426,7 +513,7 @@ impl Exp {
                                 .binary(BinaryOp::NotEq, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(ne)
                             .unwrap();
@@ -439,7 +526,7 @@ impl Exp {
                             .binary(BinaryOp::Lt, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(lt)
                             .unwrap();
@@ -452,7 +539,7 @@ impl Exp {
                             .binary(BinaryOp::Gt, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(gt)
                             .unwrap();
@@ -465,7 +552,7 @@ impl Exp {
                             .binary(BinaryOp::Le, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(le)
                             .unwrap();
@@ -478,7 +565,7 @@ impl Exp {
                             .binary(BinaryOp::Ge, expr1, expr2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(ge)
                             .unwrap();
@@ -503,19 +590,19 @@ impl Exp {
                             .binary(BinaryOp::And, and1, and2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(and1)
                             .unwrap();
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(and2)
                             .unwrap();
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(and)
                             .unwrap();
@@ -539,19 +626,19 @@ impl Exp {
                             .binary(BinaryOp::Or, or1, or2);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(or1)
                             .unwrap();
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(or2)
                             .unwrap();
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(or)
                             .unwrap();
@@ -568,7 +655,7 @@ impl Exp {
                         let load = func_data.dfg_mut().new_value().load(*var);
                         func_data
                             .layout_mut()
-                            .bb_mut(block)
+                            .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(load)
                             .unwrap();
@@ -585,7 +672,7 @@ impl Exp {
         self,
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: BasicBlock,
+        block: &mut BasicBlock,
     ) -> i32 {
         match self {
             Exp::UnaryExp { op, exp } => {

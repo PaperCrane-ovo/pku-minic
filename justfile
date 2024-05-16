@@ -38,8 +38,8 @@ docker:
 
 
 autotest-riscv:
-    docker run -it --rm -v E:/courses/pku-minic:/root/compiler maxxing/compiler-dev autotest -riscv -s lv5 /root/compiler
+    docker run -it --rm -v E:/courses/pku-minic:/root/compiler maxxing/compiler-dev autotest -riscv -s lv6 /root/compiler
 
 
 autotest-koopa:
-    docker run -it --rm -v E:/courses/pku-minic:/root/compiler maxxing/compiler-dev autotest -koopa -s lv5 /root/compiler
+    docker run -it --rm -v E:/courses/pku-minic:/root/compiler maxxing/compiler-dev autotest -koopa -s lv6 /root/compiler

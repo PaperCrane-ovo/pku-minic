@@ -99,14 +99,34 @@ ConstExp: ConstExp = {
 }
 
 
+// 将原有的Stmt拆分，解决移进规约冲突问题
 
+
+// Stmt: Span<Stmt> = {
+//     <start:@L> <block: Block> <end:@R> => Stmt::Block{block}.into_span(start, end),
+//     <start:@L> <exp:Exp?> ";" <end:@R> => Stmt::Exp{exp}.into_span(start, end),
+//     <start:@L> "return" <exp: Exp> ";" <end:@R> => Stmt::Return(Return{exp:exp}).into_span(start, end),
+//     <start:@L> <ident:Ident> "=" <exp: Exp> ";" <end:@R> => Stmt::Assign{ident:ident, exp:exp}.into_span(start, end),
+// };
 
 Stmt: Span<Stmt> = {
+    <MatchIfStmt> => <>,
+    <MisMatchIfStmt> => <>,
+}
+
+MatchIfStmt: Span<Stmt> ={
     <start:@L> <block: Block> <end:@R> => Stmt::Block{block}.into_span(start, end),
     <start:@L> <exp:Exp?> ";" <end:@R> => Stmt::Exp{exp}.into_span(start, end),
     <start:@L> "return" <exp: Exp> ";" <end:@R> => Stmt::Return(Return{exp:exp}).into_span(start, end),
     <start:@L> <ident:Ident> "=" <exp: Exp> ";" <end:@R> => Stmt::Assign{ident:ident, exp:exp}.into_span(start, end),
+    <start:@L> "if" "(" <cond:Exp> ")" <then:MatchIfStmt> "else" <els:MatchIfStmt> <end:@R> => Stmt::If{cond:cond, then:Box::new(then), els:Some(Box::new(els))}.into_span(start, end),
 };
+
+MisMatchIfStmt: Span<Stmt> = {
+    <start:@L> "if" "(" <cond:Exp> ")" <then:Stmt> <end:@R> => Stmt::If{cond:cond, then:Box::new(then),els:None}.into_span(start, end),
+    <start:@L> "if" "(" <cond:Exp> ")" <then:MatchIfStmt> "else" <els:MisMatchIfStmt> <end:@R> => Stmt::If{cond:cond, then:Box::new(then), els:Some(Box::new(els))}.into_span(start, end),
+}
+
 
 Exp: Exp = <lor_exp:LOrExp> => <>;
 

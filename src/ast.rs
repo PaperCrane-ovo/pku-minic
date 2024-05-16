@@ -190,6 +190,12 @@ pub enum Stmt {
     },
     Exp{
         exp:Option<Exp>
+    },
+    // 需要解决移进规约冲突
+    If{
+        cond: Exp,
+        then: Box<Span<Stmt>>,
+        els: Option<Box<Span<Stmt>>>,
     }
 }
 
@@ -307,3 +313,4 @@ impl<T> Spanned for Span<T>{
         self.end
     }
 }
+

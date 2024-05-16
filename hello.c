@@ -1,10 +1,9 @@
 int main() {
-  int a = 1;
-  {
-    a = 2;
-    int a = 3;
-    return a;
+  int a = 2;
+  if (1){
+    return 0;
+  }else{
+    return 0;
   }
-  {;}
   return a;
 }
