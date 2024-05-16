@@ -1,9 +1,11 @@
 int main() {
   int a = 2;
-  if (1){
-    return 0;
-  }else{
-    return 0;
+  int b = 0;
+  if (a || b){
+    a = 3;
+    return a;
+  } else {
+    a = 4;
+    return a;
   }
-  return a;
 }

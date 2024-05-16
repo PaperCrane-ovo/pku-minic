@@ -2,15 +2,22 @@ fun @main(): i32 {
 %entry:
   %0 = alloc i32
   store 2, %0
-  br 1, %1, %2
+  %1 = alloc i32
+  store 0, %1
+  %2 = load %0
+  %3 = load %1
+  %4 = ne 0, %2
+  %5 = ne 0, %3
+  %6 = or %4, %5
+  br %6, %7, %8
 
-%1:
-  ret 0
+%7:
+  store 3, %0
+  %9 = load %0
+  ret %9
 
-%2:
-  ret 0
-
-%3:
-  %4 = load %0
-  ret %4
+%8:
+  store 4, %0
+  %10 = load %0
+  ret %10
 }
