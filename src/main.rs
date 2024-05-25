@@ -59,9 +59,11 @@ fn main() -> Result<()> {
 
 
             let mut outfile = std::fs::File::create(_output)?;
-            let mut asm = String::new();
+            let mut asm = Vec::new();
             ir_program.generate(&mut asm);
-            outfile.write_all(asm.as_bytes())?;
+            for line in asm {
+                writeln!(outfile, "{}", line)?;
+            }
 
         }
     }

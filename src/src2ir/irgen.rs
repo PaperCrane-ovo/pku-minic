@@ -5,7 +5,7 @@ use koopa::ir::{
 
 use crate::ast::*;
 
-use super::symtable::{SymTable, Symbol};
+use super::{bbexaminer::BBExaminer, symtable::{SymTable, Symbol}};
 
 impl CompUnit {
     pub fn build_ir(self) -> Program {
@@ -63,18 +63,9 @@ impl FuncDef {
         // while *insts.back_key().unwrap() != it.unwrap() {
         //     insts.pop_back();
         // }
-        let ret = func_data.dfg_mut().new_value().ret(None);
-        let mut vector = Vec::new();
-        let layout = func_data.layout_mut();
-        let blocks = layout.bbs_mut().iter();
-        for block in blocks {
-            if block.1.insts().is_empty() {
-                vector.push(*block.0);
-            }
-        }
-        for block in vector {
-            layout.bb_mut(block).insts_mut().push_key_back(ret).unwrap()
-        }
+        let bb_examiner = BBExaminer::new();
+        bb_examiner.examine_ret(func_data);
+        bb_examiner.examine_bb_name(func_data);
     }
 }
 
