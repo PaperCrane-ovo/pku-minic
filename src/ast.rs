@@ -196,7 +196,13 @@ pub enum Stmt {
         cond: Exp,
         then: Box<Span<Stmt>>,
         els: Option<Box<Span<Stmt>>>,
-    }
+    },
+    While {
+        cond: Exp,
+        body: Box<Span<Stmt>>,
+    },
+    Break(Span<()>),
+    Continue(Span<()>),
 }
 
 impl NonSpanned for Stmt{}
@@ -276,6 +282,8 @@ impl NonSpanned for MyBinaryOp{}
 impl NonSpanned for i32{}
 
 impl NonSpanned for String{}
+
+impl NonSpanned for (){}
 
 
 pub trait Spanned{

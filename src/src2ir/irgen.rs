@@ -1,6 +1,8 @@
+use super::context::Context;
+
 use koopa::ir::{
     builder::{BasicBlockBuilder, LocalInstBuilder, ValueBuilder},
-    BasicBlock, BinaryOp, FunctionData, Program, Type, Value, ValueKind,
+    BasicBlock, BinaryOp, FunctionData, Program, Type, Value,
 };
 
 use crate::ast::*;
@@ -36,9 +38,12 @@ impl FuncDef {
 
         let mut block = entry;
 
+        // add context manager
+        let mut context = Context::new();
+
         self.block
             .node
-            .generate_program(func_data, symtable, &mut block);
+            .generate_program(func_data, symtable, &mut block, &mut context);
 
         // a temporary fix to remove all insts after ret
         // let dfg = func_data.dfg();
@@ -66,6 +71,7 @@ impl FuncDef {
         let bb_examiner = BBExaminer::new();
         bb_examiner.examine_ret(func_data);
         bb_examiner.examine_bb_name(func_data);
+        BBExaminer::clean_all_extra_inst(func_data);
     }
 }
 
@@ -83,12 +89,13 @@ impl Block {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         entry: &mut BasicBlock,
+        context: &mut Context,
     ) {
         dbg!("enter a block");
         symtable.push();
 
         for item in self.items {
-            item.generate_program(func_data, symtable, entry);
+            item.generate_program(func_data, symtable, entry, context);
         }
 
         symtable.pop();
@@ -102,13 +109,14 @@ impl BlockItem {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) {
         match self {
             BlockItem::Decl { decl } => {
-                decl.generate_program(func_data, symtable, block);
+                decl.generate_program(func_data, symtable, block,context);
             }
             BlockItem::Stmt { stmt } => {
-                stmt.node.generate_program(func_data, symtable, block);
+                stmt.node.generate_program(func_data, symtable, block,context);
             }
         }
     }
@@ -120,13 +128,14 @@ impl Decl {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) {
         match self {
             Decl::Var(var_decl) => {
-                var_decl.node.generate_program(func_data, symtable, block);
+                var_decl.node.generate_program(func_data, symtable, block,context);
             }
             Decl::Const(const_decl) => {
-                const_decl.node.generate_program(func_data, symtable, block);
+                const_decl.node.generate_program(func_data, symtable, block,context);
             }
         }
     }
@@ -146,9 +155,10 @@ impl VarDecl {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) {
         for def in self.defs {
-            def.generate_program(&self.ty.node, func_data, symtable, block);
+            def.generate_program(&self.ty.node, func_data, symtable, block, context);
         }
     }
 }
@@ -160,6 +170,7 @@ impl VarDef {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) {
         let var = func_data.dfg_mut().new_value().alloc(ty.build_ir());
         func_data
@@ -170,7 +181,7 @@ impl VarDef {
             .unwrap();
 
         if let Some(init) = self.init {
-            let init_val = init.generate_program(symtable, func_data, block);
+            let init_val = init.generate_program(symtable, func_data, block, context);
             let store = func_data.dfg_mut().new_value().store(init_val, var);
             func_data
                 .layout_mut()
@@ -190,8 +201,9 @@ impl InitVal {
         symtable: &mut SymTable,
         func_data: &mut FunctionData,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) -> Value {
-        self.exp.generate_program(symtable, func_data, block)
+        self.exp.generate_program(symtable, func_data, block, context)
     }
 }
 
@@ -201,9 +213,10 @@ impl ConstDecl {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) {
         for def in self.defs {
-            def.generate_program(&self.ty.node, func_data, symtable, block);
+            def.generate_program(&self.ty.node, func_data, symtable, block, context);
         }
     }
 }
@@ -215,8 +228,9 @@ impl ConstDef {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) {
-        let val = self.exp.calculate_const(func_data, symtable, block);
+        let val = self.exp.calculate_const(func_data, symtable, block, context);
         symtable.insert(self.ident.node, Symbol::Const(val));
     }
 }
@@ -227,9 +241,10 @@ impl ConstExp {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) -> i32 {
         // TODO: error handling
-        self.exp.calculate_const(func_data, symtable, block)
+        self.exp.calculate_const(func_data, symtable, block, context)
     }
 }
 
@@ -239,10 +254,11 @@ impl Stmt {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) {
         match self {
             Stmt::Return(r) => {
-                let expr = r.generate_program(symtable, func_data, block);
+                let expr = r.generate_program(symtable, func_data, block, context);
                 let ret = func_data.dfg_mut().new_value().ret(Some(expr));
                 func_data
                     .layout_mut()
@@ -259,7 +275,7 @@ impl Stmt {
                     None => panic!("variable not found"),
                 };
 
-                let exp = exp.generate_program(symtable, func_data, block);
+                let exp = exp.generate_program(symtable, func_data, block, context);
                 let store = func_data.dfg_mut().new_value().store(exp, var);
 
                 func_data
@@ -270,17 +286,17 @@ impl Stmt {
                     .unwrap();
             }
             Stmt::Block { block: _block } => {
-                _block.node.generate_program(func_data, symtable, block);
+                _block.node.generate_program(func_data, symtable, block, context);
             }
             Stmt::Exp { exp } => {
                 if let Some(exp) = exp {
-                    exp.generate_program(symtable, func_data, block);
+                    exp.generate_program(symtable, func_data, block, context);
                 }
             }
             Stmt::If { cond, then, els } => {
                 // 处理if的生成
                 // 为then和else分别创建两个block
-                let cond = cond.generate_program(symtable, func_data, block);
+                let cond = cond.generate_program(symtable, func_data, block, context);
                 let mut then_block = func_data.dfg_mut().new_bb().basic_block(None);
                 let mut else_block = func_data.dfg_mut().new_bb().basic_block(None);
                 let merge_block = func_data.dfg_mut().new_bb().basic_block(None);
@@ -299,27 +315,14 @@ impl Stmt {
                     .insts_mut()
                     .extend([br]);
 
-                let mut then_ret = false;
-                let mut else_ret = false;
+                // let mut then_ret = false;
+                // let mut else_ret = false;
 
                 // then
                 then.node
-                    .generate_program(func_data, symtable, &mut then_block);
-
-                let dfg = func_data.dfg();
-                let layout = func_data.layout(); // 获取 func_data 的可变引用
-                let insts = layout.bbs().node(&then_block).unwrap().insts();
-
-                for i in insts.iter() {
-                    match dfg.value(*i.0).kind() {
-                        ValueKind::Return(_) => {
-                            then_ret = true;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                if !then_ret {
+                    .generate_program(func_data, symtable, &mut then_block, context);
+                let bb_examiner = BBExaminer::new();
+                if !bb_examiner.is_terminated(func_data, then_block) {
                     let br = func_data.dfg_mut().new_value().jump(merge_block);
                     func_data
                         .layout_mut()
@@ -327,27 +330,35 @@ impl Stmt {
                         .insts_mut()
                         .extend([br]);
                 }
+                // let dfg = func_data.dfg();
+                // let layout = func_data.layout(); // 获取 func_data 的可变引用
+                // let insts = layout.bbs().node(&then_block).unwrap().insts();
+
+                // for i in insts.iter() {
+                //     match dfg.value(*i.0).kind() {
+                //         ValueKind::Return(_) => {
+                //             then_ret = true;
+                //             break;
+                //         }
+                //         _ => {}
+                //     }
+                // }
+                // if !then_ret {
+                //     let br = func_data.dfg_mut().new_value().jump(merge_block);
+                //     func_data
+                //         .layout_mut()
+                //         .bb_mut(then_block)
+                //         .insts_mut()
+                //         .extend([br]);
+                // }
 
                 // else
                 if let Some(els) = els {
                     els.node
-                        .generate_program(func_data, symtable, &mut else_block);
+                        .generate_program(func_data, symtable, &mut else_block, context);
                 }
-
-                let dfg = func_data.dfg();
-                let layout = func_data.layout(); // 获取 func_data 的可变引用
-                let insts = layout.bbs().node(&else_block).unwrap().insts();
-
-                for i in insts.iter() {
-                    match dfg.value(*i.0).kind() {
-                        ValueKind::Return(_) => {
-                            else_ret = true;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                if !else_ret {
+                
+                if !bb_examiner.is_terminated(func_data, else_block) {
                     let br = func_data.dfg_mut().new_value().jump(merge_block);
                     func_data
                         .layout_mut()
@@ -356,8 +367,89 @@ impl Stmt {
                         .extend([br]);
                 }
 
+                // let dfg = func_data.dfg();
+                // let layout = func_data.layout(); // 获取 func_data 的可变引用
+                // let insts = layout.bbs().node(&else_block).unwrap().insts();
+
+                // for i in insts.iter() {
+                //     match dfg.value(*i.0).kind() {
+                //         ValueKind::Return(_) => {
+                //             else_ret = true;
+                //             break;
+                //         }
+                //         _ => {}
+                //     }
+                // }
+                // if !else_ret {
+                //     let br = func_data.dfg_mut().new_value().jump(merge_block);
+                //     func_data
+                //         .layout_mut()
+                //         .bb_mut(else_block)
+                //         .insts_mut()
+                //         .extend([br]);
+                // }
+
                 // merge
                 *block = merge_block;
+            }
+            Stmt::While { cond, body } => {
+                let cond_block = func_data.dfg_mut().new_bb().basic_block(None);
+                let body_block = func_data.dfg_mut().new_bb().basic_block(None);
+                let next_block = func_data.dfg_mut().new_bb().basic_block(None);
+                func_data
+                    .layout_mut()
+                    .bbs_mut()
+                    .extend([cond_block, body_block, next_block]);
+                context.push_loop_bound(cond_block, next_block);
+                let jump_to_cond = func_data
+                    .dfg_mut()
+                    .new_value()
+                    .jump(cond_block);
+                func_data.layout_mut().bb_mut(*block).insts_mut().push_key_back(jump_to_cond).unwrap();
+                *block = cond_block;
+                let cond = cond.generate_program(symtable, func_data, block, context);
+                let br = func_data
+                    .dfg_mut()
+                    .new_value()
+                    .branch(cond, body_block, next_block);
+                func_data.layout_mut().bb_mut(*block).insts_mut().push_key_back(br).unwrap();
+                *block = body_block;
+                body.node.generate_program(func_data, symtable, block, context);
+                // TODO : return in while
+                let jump_to_cond = func_data
+                    .dfg_mut()
+                    .new_value()
+                    .jump(cond_block);
+                let bb_examiner = BBExaminer::new();
+                if !bb_examiner.is_terminated(func_data, *block) {
+                    func_data.layout_mut().bb_mut(*block).insts_mut().push_key_back(jump_to_cond).unwrap();
+                }
+                *block = next_block;
+                context.pop_loop_bound();
+            }
+            Stmt::Break(_span) => {
+                let loop_bound = context.get_loop_bound();
+                if !loop_bound.is_none() {
+                    let jump = func_data.dfg_mut().new_value().jump(loop_bound.unwrap().exit);
+                    func_data
+                        .layout_mut()
+                        .bb_mut(*block)
+                        .insts_mut()
+                        .push_key_back(jump)
+                        .unwrap();
+                }
+            }
+            Stmt::Continue(_span) => {
+                let loop_bound = context.get_loop_bound();
+                if !loop_bound.is_none() {
+                    let jump = func_data.dfg_mut().new_value().jump(loop_bound.unwrap().entry);
+                    func_data
+                        .layout_mut()
+                        .bb_mut(*block)
+                        .insts_mut()
+                        .push_key_back(jump)
+                        .unwrap();
+                }
             }
         }
     }
@@ -369,8 +461,9 @@ impl Return {
         symtable: &mut SymTable,
         func_data: &mut FunctionData,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) -> Value {
-        self.exp.generate_program(symtable, func_data, block)
+        self.exp.generate_program(symtable, func_data, block, context)
     }
 }
 
@@ -380,11 +473,12 @@ impl Exp {
         symtable: &mut SymTable,
         func_data: &mut FunctionData,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) -> Value {
         match self {
             // 一元运算表达式
             Exp::UnaryExp { op, exp } => {
-                let expr = exp.generate_program(symtable, func_data, block);
+                let expr = exp.generate_program(symtable, func_data, block, context);
                 match op.node {
                     MyUnaryOp::Neg => {
                         // Neg转为0减，即二元运算
@@ -420,8 +514,8 @@ impl Exp {
                 }
             }
             Exp::BinaryExp { op, exp1, exp2 } => {
-                let expr1 = exp1.generate_program(symtable, func_data, block);
-                let expr2 = exp2.generate_program(symtable, func_data, block);
+                let expr1 = exp1.generate_program(symtable, func_data, block, context);
+                let expr2 = exp2.generate_program(symtable, func_data, block, context);
                 match op.node {
                     MyBinaryOp::Add => {
                         let add =
@@ -674,10 +768,11 @@ impl Exp {
         func_data: &mut FunctionData,
         symtable: &mut SymTable,
         block: &mut BasicBlock,
+        context: &mut Context,
     ) -> i32 {
         match self {
             Exp::UnaryExp { op, exp } => {
-                let exp = exp.calculate_const(func_data, symtable, block);
+                let exp = exp.calculate_const(func_data, symtable, block, context);
                 match op.node {
                     MyUnaryOp::Neg => -exp,
                     MyUnaryOp::Not => {
@@ -691,8 +786,8 @@ impl Exp {
                 }
             }
             Exp::BinaryExp { op, exp1, exp2 } => {
-                let exp1 = exp1.calculate_const(func_data, symtable, block);
-                let exp2 = exp2.calculate_const(func_data, symtable, block);
+                let exp1 = exp1.calculate_const(func_data, symtable, block, context);
+                let exp2 = exp2.calculate_const(func_data, symtable, block, context);
                 match op.node {
                     MyBinaryOp::Add => exp1 + exp2,
                     MyBinaryOp::Sub => exp1 - exp2,
