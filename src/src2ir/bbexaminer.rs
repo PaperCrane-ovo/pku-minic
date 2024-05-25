@@ -1,4 +1,4 @@
-use koopa::ir::{builder::LocalInstBuilder, BasicBlock, FunctionData, Value, ValueKind};
+use koopa::ir::{builder::{LocalInstBuilder, ValueBuilder}, BasicBlock, FunctionData, Value, ValueKind};
 
 /// This module is responsible for examining the basic blocks to make sure that they are all ending with a terminator instruction.
 pub struct BBExaminer {}
@@ -7,7 +7,8 @@ impl BBExaminer {
         BBExaminer {}
     }
     pub fn examine_ret(&self, func_data: &mut FunctionData) {
-        let ret = func_data.dfg_mut().new_value().ret(None);
+        let zero = func_data.dfg_mut().new_value().integer(0);
+        let ret = func_data.dfg_mut().new_value().ret(Some(zero));
         let mut vector = Vec::new();
         let layout = func_data.layout_mut();
         let blocks = layout.bbs_mut().iter();

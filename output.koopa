@@ -10,10 +10,26 @@ fun @main(): i32 {
   br %2, %main_1, %main_2
 
 %main_1:
-  store 20, %0
-  jump %main_0
+  jump %main_3
 
 %main_2:
+  ret
+
+%main_3:
   %3 = load %0
-  ret %3
+  %4 = lt %3, 5
+  br %4, %main_4, %main_5
+
+%main_4:
+  %5 = load %0
+  %6 = add %5, 1
+  store %6, %0
+  %7 = load %0
+  ret %7
+
+%main_5:
+  %8 = load %0
+  %9 = add %8, 1
+  store %9, %0
+  jump %main_0
 }
