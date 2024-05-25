@@ -331,8 +331,10 @@ impl GenerateAsmValue for Value {
                     dfg.bb(false_block).name().as_deref().unwrap().to_string();
                 let true_block_label = format!("L{}", &true_block_label_name[1..]);
                 let false_block_label = format!("L{}", &false_block_label_name[1..]);
-                asm.push(TempRiscv::Inst(RiscvInst::Bnez(cond_reg, true_block_label)));
+                asm.push(TempRiscv::Inst(RiscvInst::Bnez(cond_reg, format!("jto{}", true_block_label))));
                 asm.push(TempRiscv::Inst(RiscvInst::J(false_block_label)));
+                asm.push(TempRiscv::Label(format!("jto{}", true_block_label)));
+                asm.push(TempRiscv::Inst(RiscvInst::J(true_block_label)));
             }
             ValueKind::Jump(jump) => {
                 let target = jump.target();
