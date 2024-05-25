@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Neg};
 
 
 use super::{register::RegId, riscv::RiscvInst, riscvgen::AsmProgram};
@@ -39,6 +39,12 @@ impl I12{
 impl Display for I12{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
+    }
+}
+impl Neg for I12{
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        I12{value: -self.value}
     }
 }
 

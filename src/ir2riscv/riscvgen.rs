@@ -80,7 +80,7 @@ impl GenerateAsm for FunctionData {
         let stack_size = stack_frame.get_stack_size(self);
 
         // TODO : when stack_size is larger than i12
-        let stack_size = I12::build(stack_size as i32, asm);
+        let stack_size = I12::build(-(stack_size as i32), asm);
         match stack_size {
             I12pos::Imm12(stack_size) => {
                 // asm.push_str(&format!("    addi sp, sp, {}\n", stack_size));
