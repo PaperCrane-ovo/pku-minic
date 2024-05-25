@@ -423,8 +423,8 @@ impl GenerateAsmValue for Value {
                 asm.push(TempRiscv::Inst(RiscvInst::Sw(src_reg, i12_offset, RegId::SP)));
             }
             I12pos::RegId(i12_offset) => {
-                asm.push(TempRiscv::Inst(RiscvInst::Add(RegId::T0, RegId::SP, i12_offset)));
-                asm.push(TempRiscv::Inst(RiscvInst::Sw(src_reg, I12 { value: (0) }, RegId::T0)));
+                asm.push(TempRiscv::Inst(RiscvInst::Add(RegId::T4, RegId::SP, i12_offset)));
+                asm.push(TempRiscv::Inst(RiscvInst::Sw(src_reg, I12 { value: (0) }, RegId::T4)));
             }
         }
     }
