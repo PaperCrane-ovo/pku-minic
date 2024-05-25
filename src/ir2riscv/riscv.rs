@@ -1,13 +1,13 @@
 use std::fmt::Display;
 
-use super::{imm::i12, register::RegId, stack::StackFrame};
+use super::{imm::I12, register::RegId};
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum RiscvInst{
 
     // Arithmetic
     Add(RegId,RegId,RegId),
-    Addi(RegId,RegId,i12),
+    Addi(RegId,RegId,I12),
     Sub(RegId,RegId,RegId),
     Mul(RegId,RegId,RegId),
     Div(RegId,RegId,RegId),
@@ -22,12 +22,12 @@ pub enum RiscvInst{
 
     // Bitwise
     And(RegId,RegId,RegId),
-    Andi(RegId,RegId,i12),
+    Andi(RegId,RegId,I12),
     Not(RegId,RegId),
     Or(RegId,RegId,RegId),
-    Ori(RegId,RegId,i12),
+    Ori(RegId,RegId,I12),
     Xor(RegId,RegId,RegId),
-    Xori(RegId,RegId,i12),
+    Xori(RegId,RegId,I12),
 
     // Compare
     /// Set less than
@@ -35,13 +35,13 @@ pub enum RiscvInst{
     Slt(RegId,RegId,RegId),
     /// Set less than immediate
     /// rd = (rs1 < imm) ? 1 : 0
-    Slti(RegId,RegId,i12),
+    Slti(RegId,RegId,I12),
     /// Set less than unsigned
     /// rd = (rs1 < rs2) ? 1 : 0
     Sltu(RegId,RegId,RegId),
     /// Set less than immediate unsigned
     /// rd = (rs1 < imm) ? 1 : 0
-    Sltiu(RegId,RegId,i12),
+    Sltiu(RegId,RegId,I12),
     /// Set equal to zero
     /// rd = (rs1 == 0) ? 1 : 0
     Seqz(RegId,RegId),
@@ -64,10 +64,10 @@ pub enum RiscvInst{
     // Memory
     /// Load word
     /// rd = memory[rs1 + imm]
-    Lw(RegId,i12,RegId),
+    Lw(RegId,I12,RegId),
     /// Store word
     /// memory[rs1 + imm] = rs2
-    Sw(RegId,i12,RegId),
+    Sw(RegId,I12,RegId),
 
     // Control flow
     /// Jump 
