@@ -29,8 +29,8 @@ impl I12{
         if value >= -2048 && value <= 2047 {
             I12pos::Imm12(I12{value})
         }else{
-            asm.push(super::riscv::TempRiscv::Inst(RiscvInst::Li(RegId::T0,value)));
-            I12pos::RegId(RegId::T0)
+            asm.push(super::riscv::TempRiscv::Inst(RiscvInst::Li(RegId::T2,value)));
+            I12pos::RegId(RegId::T2)
             
         }
     }

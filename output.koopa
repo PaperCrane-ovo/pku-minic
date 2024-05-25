@@ -20000,5 +20000,6 @@ fun @main(): i32 {
   store 9998, %9998
   %9999 = alloc i32
   store 9999, %9999
-  ret 0
+  %10000 = load %15
+  ret %10000
 }

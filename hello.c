@@ -10001,5 +10001,5 @@ int main()
   int a9998 = 9998;
   int a9999 = 9999;
 
-  return 0;
+  return a15;
 }
