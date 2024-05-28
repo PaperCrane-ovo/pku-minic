@@ -668,76 +668,281 @@ impl Exp {
                     }
                     // 逻辑运算需要先转为0和1然后再进行运算
                     MyBinaryOp::LAnd => {
+                        // let zero = func_data.dfg_mut().new_value().integer(0);
+                        // let and1 =
+                        //     func_data
+                        //         .dfg_mut()
+                        //         .new_value()
+                        //         .binary(BinaryOp::NotEq, zero, expr1);
+                        // let and2 =
+                        //     func_data
+                        //         .dfg_mut()
+                        //         .new_value()
+                        //         .binary(BinaryOp::NotEq, zero, expr2);
+                        // let and = func_data
+                        //     .dfg_mut()
+                        //     .new_value()
+                        //     .binary(BinaryOp::And, and1, and2);
+                        // func_data
+                        //     .layout_mut()
+                        //     .bb_mut(*block)
+                        //     .insts_mut()
+                        //     .push_key_back(and1)
+                        //     .unwrap();
+                        // func_data
+                        //     .layout_mut()
+                        //     .bb_mut(*block)
+                        //     .insts_mut()
+                        //     .push_key_back(and2)
+                        //     .unwrap();
+                        // func_data
+                        //     .layout_mut()
+                        //     .bb_mut(*block)
+                        //     .insts_mut()
+                        //     .push_key_back(and)
+                        //     .unwrap();
+                        // and
+
+                        // 实现短路求值
+                        let result = func_data.dfg_mut().new_value().alloc(Type::get_i32());
+                        func_data
+                            .layout_mut()
+                            .bb_mut(*block)
+                            .insts_mut()
+                            .push_key_back(result)
+                            .unwrap();
                         let zero = func_data.dfg_mut().new_value().integer(0);
+                        let one = func_data.dfg_mut().new_value().integer(1);
+
+                        let store = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .store(zero,result);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(*block)
+                            .insts_mut()
+                            .push_key_back(store)
+                            .unwrap();
+
                         let and1 =
                             func_data
                                 .dfg_mut()
                                 .new_value()
                                 .binary(BinaryOp::NotEq, zero, expr1);
-                        let and2 =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::NotEq, zero, expr2);
-                        let and = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::And, and1, and2);
                         func_data
                             .layout_mut()
                             .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(and1)
                             .unwrap();
+                        let and2_block = func_data.dfg_mut().new_bb().basic_block(None);
+                        let and2_next_block = func_data.dfg_mut().new_bb().basic_block(None);
+                        let merge_block = func_data.dfg_mut().new_bb().basic_block(None);
+                        func_data
+                            .layout_mut()
+                            .bbs_mut()
+                            .extend([and2_block, and2_next_block, merge_block]);
+                        let br = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .branch(and1, and2_block, merge_block);
                         func_data
                             .layout_mut()
                             .bb_mut(*block)
+                            .insts_mut()
+                            .push_key_back(br)
+                            .unwrap();
+                        let and2 = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .binary(BinaryOp::NotEq, zero, expr2);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(and2_block)
                             .insts_mut()
                             .push_key_back(and2)
                             .unwrap();
+                        let br = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .branch(and2, and2_next_block, merge_block);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(and2_block)
+                            .insts_mut()
+                            .push_key_back(br)
+                            .unwrap();
+                        let store = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .store(one, result);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(and2_next_block)
+                            .insts_mut()
+                            .push_key_back(store)
+                            .unwrap();
+                        let jump = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .jump(merge_block);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(and2_next_block)
+                            .insts_mut()
+                            .push_key_back(jump)
+                            .unwrap();
+                        *block = merge_block;
+                        let load = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .load(result);
                         func_data
                             .layout_mut()
                             .bb_mut(*block)
                             .insts_mut()
-                            .push_key_back(and)
+                            .push_key_back(load)
                             .unwrap();
-                        and
+                        load
+
+
+
                     }
                     MyBinaryOp::LOr => {
+                        // let zero = func_data.dfg_mut().new_value().integer(0);
+                        // let or1 =
+                        //     func_data
+                        //         .dfg_mut()
+                        //         .new_value()
+                        //         .binary(BinaryOp::NotEq, zero, expr1);
+                        // let or2 =
+                        //     func_data
+                        //         .dfg_mut()
+                        //         .new_value()
+                        //         .binary(BinaryOp::NotEq, zero, expr2);
+                        // let or = func_data
+                        //     .dfg_mut()
+                        //     .new_value()
+                        //     .binary(BinaryOp::Or, or1, or2);
+                        // func_data
+                        //     .layout_mut()
+                        //     .bb_mut(*block)
+                        //     .insts_mut()
+                        //     .push_key_back(or1)
+                        //     .unwrap();
+                        // func_data
+                        //     .layout_mut()
+                        //     .bb_mut(*block)
+                        //     .insts_mut()
+                        //     .push_key_back(or2)
+                        //     .unwrap();
+                        // func_data
+                        //     .layout_mut()
+                        //     .bb_mut(*block)
+                        //     .insts_mut()
+                        //     .push_key_back(or)
+                        //     .unwrap();
+                        // or
+                        let result = func_data.dfg_mut().new_value().alloc(Type::get_i32());
+                        func_data
+                            .layout_mut()
+                            .bb_mut(*block)
+                            .insts_mut()
+                            .push_key_back(result)
+                            .unwrap();
                         let zero = func_data.dfg_mut().new_value().integer(0);
+                        let one = func_data.dfg_mut().new_value().integer(1);
+                        let store = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .store(one,result);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(*block)
+                            .insts_mut()
+                            .push_key_back(store)
+                            .unwrap();
+                        let or2_block = func_data.dfg_mut().new_bb().basic_block(None);
+                        let or2_next_block = func_data.dfg_mut().new_bb().basic_block(None);
+                        let merge_block = func_data.dfg_mut().new_bb().basic_block(None);
+                        func_data
+                            .layout_mut()
+                            .bbs_mut()
+                            .extend([or2_block, or2_next_block, merge_block]);
                         let or1 =
                             func_data
                                 .dfg_mut()
                                 .new_value()
                                 .binary(BinaryOp::NotEq, zero, expr1);
-                        let or2 =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::NotEq, zero, expr2);
-                        let or = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Or, or1, or2);
                         func_data
                             .layout_mut()
                             .bb_mut(*block)
                             .insts_mut()
                             .push_key_back(or1)
                             .unwrap();
+                        let br = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .branch(or1, merge_block, or2_block);
                         func_data
                             .layout_mut()
                             .bb_mut(*block)
+                            .insts_mut()
+                            .push_key_back(br)
+                            .unwrap();
+                        let or2 = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .binary(BinaryOp::NotEq, zero, expr2);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(or2_block)
                             .insts_mut()
                             .push_key_back(or2)
                             .unwrap();
+                        let br = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .branch(or2, merge_block, or2_next_block);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(or2_block)
+                            .insts_mut()
+                            .push_key_back(br)
+                            .unwrap();
+                        let store = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .store(zero, result);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(or2_next_block)
+                            .insts_mut()
+                            .push_key_back(store)
+                            .unwrap();
+                        let jump = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .jump(merge_block);
+                        func_data
+                            .layout_mut()
+                            .bb_mut(or2_next_block)
+                            .insts_mut()
+                            .push_key_back(jump)
+                            .unwrap();
+                        *block = merge_block;
+                        let load = func_data
+                            .dfg_mut()
+                            .new_value()
+                            .load(result);
                         func_data
                             .layout_mut()
                             .bb_mut(*block)
                             .insts_mut()
-                            .push_key_back(or)
+                            .push_key_back(load)
                             .unwrap();
-                        or
+                        load
                     }
                 }
             }
