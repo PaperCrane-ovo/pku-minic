@@ -1,12 +1,13 @@
 use std::{collections::HashMap, hash::Hash};
 
-use koopa::ir::Value;
+use koopa::ir::{Function, Value};
 
 /// 符号表的实现
 
 pub enum Symbol{
     Const(i32),
     Var(Value),
+    Func(Function),
 }
 pub struct SymTable{
     table: ChainMap<String,Symbol>,

@@ -1,49 +1,100 @@
-use super::context::Context;
+use super::{
+    context::Context,
+    core::{Core, InstType},
+};
 
 use koopa::ir::{
-    builder::{BasicBlockBuilder, LocalInstBuilder, ValueBuilder},
-    BasicBlock, BinaryOp, FunctionData, Program, Type, Value,
+    builder::{GlobalInstBuilder, ValueBuilder}, BinaryOp, FunctionData, Program, Type, Value
 };
 
 use crate::ast::*;
 
-use super::{bbexaminer::BBExaminer, symtable::{SymTable, Symbol}};
+use super::{
+    bbexaminer::BBExaminer,
+    symtable::{SymTable, Symbol},
+};
 
 impl CompUnit {
     pub fn build_ir(self) -> Program {
         let mut symtable = SymTable::new();
         let mut program = Program::new();
+        symtable.push();
         self.generate_program(&mut program, &mut symtable);
+        symtable.pop();
         program
     }
     fn generate_program(self, program: &mut Program, symtable: &mut SymTable) {
-        self.func_def.generate_program(program, symtable);
+        // declare sysy lib functions
+        self.decl_func(program, symtable, "@getint", vec![], Type::get_i32());
+        self.decl_func(program, symtable, "@getch", vec![], Type::get_i32());
+        self.decl_func(program, symtable, "@getarray", vec![Type::get_pointer(Type::get_i32())], Type::get_i32());
+        self.decl_func(program, symtable, "@putint", vec![Type::get_i32()], Type::get_unit());
+        self.decl_func(program, symtable, "@putch", vec![Type::get_i32()], Type::get_unit());
+        self.decl_func(program, symtable, "@putarray", vec![Type::get_i32(), Type::get_pointer(Type::get_i32())], Type::get_unit());
+        self.decl_func(program, symtable, "@starttime", vec![], Type::get_unit());
+        self.decl_func(program, symtable, "@stoptime", vec![], Type::get_unit());
+
+        for item in self.global_items {
+            match item {
+                GlobalItem::Decl(decl) => decl.generate_program_global(program, symtable),
+                GlobalItem::FuncDef(func_def) => func_def.generate_program(program, symtable),
+            }
+        }
+    }
+    fn decl_func(&self,program:&mut Program,symtable:&mut SymTable,name:&str,params_ty:Vec<Type>,ret_ty:Type){
+        let func = program.new_func(
+            FunctionData::new_decl(name.to_string(), params_ty, ret_ty)
+        );
+        symtable.insert(name[1..].to_string(), Symbol::Func(func));
     }
 }
 
 impl FuncDef {
     pub fn generate_program(self, program: &mut Program, symtable: &mut SymTable) {
+        let params = self
+            .params
+            .iter()
+            .map(|param| param.node.generate_program())
+            .collect();
+
         let func = program.new_func(FunctionData::with_param_names(
             format!("@{}", self.ident.node),
-            vec![],
-            self.func_type.node.generate_program(),
+            params,
+            self.func_type.node.build_ir(),
         ));
-        let func_data = program.func_mut(func);
-
-        let entry = func_data
-            .dfg_mut()
-            .new_bb()
-            .basic_block(Some("%entry".into()));
-        func_data.layout_mut().bbs_mut().extend([entry]);
-
-        let mut block = entry;
 
         // add context manager
         let mut context = Context::new();
 
-        self.block
-            .node
-            .generate_program(func_data, symtable, &mut block, &mut context);
+        let mut func_data = program.func_mut(func);
+
+        let return_type = self.func_type.node;
+
+        let mut core = Core::new(&mut func_data, &mut context, return_type);
+
+        // insert function into symbol table
+
+        symtable.insert(self.ident.node.clone(), Symbol::Func(func));
+
+        symtable.push();
+
+        // insert parameters into symbol table and koopa ir
+
+        for (i, param) in self.params.iter().enumerate() {
+            let (_, ty) = param.node.generate_program();
+            let var = core.new_value(InstType::Alloc(ty));
+            let dfg = core.dfg_mut();
+            let name = format!("%{}",param.node.ident.node);
+            dfg.set_value_name(var, Some(name));
+
+            symtable.insert(param.node.ident.node.clone(), Symbol::Var(var));
+            let cur_param = core.func_data().params()[i];
+            let store = core.new_value(InstType::Store(cur_param, var));
+            core.push_insts(vec![var, store]);
+        }
+
+        self.block.node.generate_program(&mut core, symtable);
+        symtable.pop();
 
         // a temporary fix to remove all insts after ret
         // let dfg = func_data.dfg();
@@ -69,33 +120,38 @@ impl FuncDef {
         //     insts.pop_back();
         // }
         let bb_examiner = BBExaminer::new();
-        bb_examiner.examine_ret(func_data);
-        bb_examiner.examine_bb_name(func_data);
-        BBExaminer::clean_all_extra_inst(func_data);
+        bb_examiner.examine_ret(&mut core);
+        bb_examiner.examine_bb_name(&mut core);
+        BBExaminer::clean_all_extra_inst(&mut core);
     }
 }
 
-impl FuncType {
-    pub fn generate_program(self) -> Type {
-        match self {
-            FuncType::Int => Type::get_i32(),
-        }
+/// Deprecated because of the existence of BType
+// impl FuncType {
+//     pub fn generate_program(&self) -> Type {
+//         match self {
+//             FuncType::Int => Type::get_i32(),
+//             FuncType::Void => Type::get_unit(),
+//         }
+//     }
+// }
+
+impl FuncParam {
+    pub fn generate_program(&self) -> (Option<String>, Type) {
+        (
+            Some(format!("@{}", self.ident.node)),
+            self.ty.node.build_ir(),
+        )
     }
 }
 
 impl Block {
-    pub fn generate_program(
-        self,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        entry: &mut BasicBlock,
-        context: &mut Context,
-    ) {
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) {
         dbg!("enter a block");
         symtable.push();
 
         for item in self.items {
-            item.generate_program(func_data, symtable, entry, context);
+            item.generate_program(core, symtable);
         }
 
         symtable.pop();
@@ -104,38 +160,36 @@ impl Block {
 }
 
 impl BlockItem {
-    pub fn generate_program(
-        self,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) {
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) {
         match self {
             BlockItem::Decl { decl } => {
-                decl.generate_program(func_data, symtable, block,context);
+                decl.generate_program(core, symtable);
             }
             BlockItem::Stmt { stmt } => {
-                stmt.node.generate_program(func_data, symtable, block,context);
+                stmt.node.generate_program(core, symtable);
             }
         }
     }
 }
 
 impl Decl {
-    pub fn generate_program(
-        self,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) {
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) {
         match self {
             Decl::Var(var_decl) => {
-                var_decl.node.generate_program(func_data, symtable, block,context);
+                var_decl.node.generate_program(core, symtable);
             }
             Decl::Const(const_decl) => {
-                const_decl.node.generate_program(func_data, symtable, block,context);
+                const_decl.node.generate_program(symtable);
+            }
+        }
+    }
+    pub fn generate_program_global(self,program:&mut Program,symtable:&mut SymTable){
+        match self {
+            Decl::Var(var_decl) => {
+                var_decl.node.generate_program_global(program, symtable);
+            }
+            Decl::Const(const_decl) => {
+                const_decl.node.generate_program(symtable);
             }
         }
     }
@@ -145,190 +199,135 @@ impl BType {
     pub fn build_ir(&self) -> Type {
         match self {
             BType::Int => Type::get_i32(),
+            BType::Void => Type::get_unit(),
         }
     }
 }
 
 impl VarDecl {
-    pub fn generate_program(
-        self,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) {
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) {
         for def in self.defs {
-            def.generate_program(&self.ty.node, func_data, symtable, block, context);
+            def.generate_program(&self.ty.node, core, symtable);
+        }
+    }
+    pub fn generate_program_global(self,program:&mut Program,symtable:&mut SymTable){
+        for def in self.defs {
+            def.generate_program_global(program, &self.ty.node, symtable);
         }
     }
 }
 
 impl VarDef {
-    pub fn generate_program(
-        self,
-        ty: &BType,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) {
-        let var = func_data.dfg_mut().new_value().alloc(ty.build_ir());
-        func_data
-            .layout_mut()
-            .bb_mut(*block)
-            .insts_mut()
-            .push_key_back(var)
-            .unwrap();
+    pub fn generate_program(self, ty: &BType, core: &mut Core, symtable: &mut SymTable) {
+        let var = core.new_value(InstType::Alloc(ty.build_ir()));
+        core.push_inst(var);
 
         if let Some(init) = self.init {
-            let init_val = init.generate_program(symtable, func_data, block, context);
-            let store = func_data.dfg_mut().new_value().store(init_val, var);
-            func_data
-                .layout_mut()
-                .bb_mut(*block)
-                .insts_mut()
-                .push_key_back(store)
-                .unwrap();
+            let init_val = init.generate_program(core, symtable);
+            let store = core.new_value(InstType::Store(init_val, var));
+            core.push_inst(store);
         }
 
-        symtable.insert(self.ident.node, Symbol::Var(var))
+        symtable.insert(self.ident.node, Symbol::Var(var));
     }
+    pub fn generate_program_global(self,program:&mut Program,ty:&BType,symtable:&mut SymTable){
+        let init = match self.init{
+            Some(init) => {
+                let val = init.exp.calculate_const(symtable);
+                program.new_value().integer(val)
+            }
+            None => program.new_value().zero_init(ty.build_ir()),
+        };
+
+        let global_var = program.new_value().global_alloc(init);
+        program.set_value_name(global_var, Some(format!("@{}",self.ident.node)));
+        
+        symtable.insert(self.ident.node, Symbol::Var(global_var));
+    }
+
 }
 
 impl InitVal {
-    pub fn generate_program(
-        self,
-        symtable: &mut SymTable,
-        func_data: &mut FunctionData,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) -> Value {
-        self.exp.generate_program(symtable, func_data, block, context)
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) -> Value {
+        self.exp.generate_program(core, symtable)
     }
 }
 
 impl ConstDecl {
-    pub fn generate_program(
-        self,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) {
+    pub fn generate_program(self,symtable: &mut SymTable) {
         for def in self.defs {
-            def.generate_program(&self.ty.node, func_data, symtable, block, context);
+            def.generate_program(&self.ty.node, symtable);
         }
     }
 }
 
 impl ConstDef {
-    pub fn generate_program(
-        self,
-        _ty: &BType,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) {
-        let val = self.exp.calculate_const(func_data, symtable, block, context);
+    pub fn generate_program(self, _ty: &BType, symtable: &mut SymTable) {
+        let val = self.exp.calculate_const(symtable);
         symtable.insert(self.ident.node, Symbol::Const(val));
     }
 }
 
 impl ConstExp {
-    pub fn calculate_const(
-        self,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) -> i32 {
+    pub fn calculate_const(self,symtable: &mut SymTable) -> i32 {
         // TODO: error handling
-        self.exp.calculate_const(func_data, symtable, block, context)
+        self.exp.calculate_const(symtable)
     }
 }
 
 impl Stmt {
-    pub fn generate_program(
-        self,
-        func_data: &mut FunctionData,
-        symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) {
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) {
         match self {
             Stmt::Return(r) => {
-                let expr = r.generate_program(symtable, func_data, block, context);
-                let ret = func_data.dfg_mut().new_value().ret(Some(expr));
-                func_data
-                    .layout_mut()
-                    .bb_mut(*block)
-                    .insts_mut()
-                    .push_key_back(ret)
-                    .unwrap();
+                let expr = r.generate_program(core, symtable);
+                let ret = core.new_value(InstType::Ret(Some(expr)));
+                core.push_inst(ret);
             }
             Stmt::Assign { ident, exp } => {
                 let var = symtable.get(&ident.node);
                 let var = match var {
                     Some(Symbol::Var(var)) => *var,
                     Some(Symbol::Const(_)) => panic!("cannot assign to a const"),
+                    Some(Symbol::Func(_)) => panic!("cannot assign to a function"),
                     None => panic!("variable not found"),
                 };
 
-                let exp = exp.generate_program(symtable, func_data, block, context);
-                let store = func_data.dfg_mut().new_value().store(exp, var);
-
-                func_data
-                    .layout_mut()
-                    .bb_mut(*block)
-                    .insts_mut()
-                    .push_key_back(store)
-                    .unwrap();
+                let exp = exp.generate_program(core, symtable);
+                dbg!(ident.start_pos(),ident.end_pos());
+                let store = core.new_value(InstType::Store(exp, var));
+                core.push_inst(store);
             }
             Stmt::Block { block: _block } => {
-                _block.node.generate_program(func_data, symtable, block, context);
+                _block.node.generate_program(core, symtable);
             }
             Stmt::Exp { exp } => {
                 if let Some(exp) = exp {
-                    exp.generate_program(symtable, func_data, block, context);
+                    exp.generate_program(core, symtable);
                 }
             }
             Stmt::If { cond, then, els } => {
                 // 处理if的生成
                 // 为then和else分别创建两个block
-                let cond = cond.generate_program(symtable, func_data, block, context);
-                let mut then_block = func_data.dfg_mut().new_bb().basic_block(None);
-                let mut else_block = func_data.dfg_mut().new_bb().basic_block(None);
-                let merge_block = func_data.dfg_mut().new_bb().basic_block(None);
-                func_data
-                    .layout_mut()
-                    .bbs_mut()
-                    .extend([then_block, else_block, merge_block]);
+                let cond = cond.generate_program(core, symtable);
+                let then_block = core.new_block(None);
+                let else_block = core.new_block(None);
+                let merge_block = core.new_block(None);
+                core.push_blocks(vec![then_block, else_block, merge_block]);
                 // if cond
-                let br = func_data
-                    .dfg_mut()
-                    .new_value()
-                    .branch(cond, then_block, else_block);
-                func_data
-                    .layout_mut()
-                    .bb_mut(*block)
-                    .insts_mut()
-                    .extend([br]);
+                let br = core.new_value(InstType::Branch(cond, then_block, else_block));
+                core.push_inst(br);
 
                 // let mut then_ret = false;
                 // let mut else_ret = false;
 
                 // then
-                then.node
-                    .generate_program(func_data, symtable, &mut then_block, context);
+                core.switch_block(then_block);
+                then.node.generate_program(core, symtable);
+
                 let bb_examiner = BBExaminer::new();
-                if !bb_examiner.is_terminated(func_data, then_block) {
-                    let br = func_data.dfg_mut().new_value().jump(merge_block);
-                    func_data
-                        .layout_mut()
-                        .bb_mut(then_block)
-                        .insts_mut()
-                        .extend([br]);
+                if !bb_examiner.is_terminated(core, then_block) {
+                    let br = core.new_value(InstType::Jump(merge_block));
+                    core.push_inst(br);
                 }
                 // let dfg = func_data.dfg();
                 // let layout = func_data.layout(); // 获取 func_data 的可变引用
@@ -354,17 +353,14 @@ impl Stmt {
 
                 // else
                 if let Some(els) = els {
-                    els.node
-                        .generate_program(func_data, symtable, &mut else_block, context);
+                    core.switch_block(else_block);
+                    els.node.generate_program(core, symtable);
                 }
-                
-                if !bb_examiner.is_terminated(func_data, else_block) {
-                    let br = func_data.dfg_mut().new_value().jump(merge_block);
-                    func_data
-                        .layout_mut()
-                        .bb_mut(else_block)
-                        .insts_mut()
-                        .extend([br]);
+
+                if !bb_examiner.is_terminated(core, else_block) {
+                    let br = core.new_value(InstType::Jump(merge_block));
+                    core.switch_block(else_block);
+                    core.push_inst(br);
                 }
 
                 // let dfg = func_data.dfg();
@@ -390,65 +386,47 @@ impl Stmt {
                 // }
 
                 // merge
-                *block = merge_block;
+                core.switch_block(merge_block);
             }
             Stmt::While { cond, body } => {
-                let cond_block = func_data.dfg_mut().new_bb().basic_block(None);
-                let body_block = func_data.dfg_mut().new_bb().basic_block(None);
-                let next_block = func_data.dfg_mut().new_bb().basic_block(None);
-                func_data
-                    .layout_mut()
-                    .bbs_mut()
-                    .extend([cond_block, body_block, next_block]);
-                context.push_loop_bound(cond_block, next_block);
-                let jump_to_cond = func_data
-                    .dfg_mut()
-                    .new_value()
-                    .jump(cond_block);
-                func_data.layout_mut().bb_mut(*block).insts_mut().push_key_back(jump_to_cond).unwrap();
-                *block = cond_block;
-                let cond = cond.generate_program(symtable, func_data, block, context);
-                let br = func_data
-                    .dfg_mut()
-                    .new_value()
-                    .branch(cond, body_block, next_block);
-                func_data.layout_mut().bb_mut(*block).insts_mut().push_key_back(br).unwrap();
-                *block = body_block;
-                body.node.generate_program(func_data, symtable, block, context);
+                let cond_block = core.new_block(None);
+                let body_block = core.new_block(None);
+                let next_block = core.new_block(None);
+
+                core.push_blocks(vec![cond_block, body_block, next_block]);
+
+                core.context_mut().push_loop_bound(cond_block, next_block);
+                let jump_to_cond = core.new_value(InstType::Jump(cond_block));
+                core.push_inst(jump_to_cond);
+                core.switch_block(cond_block);
+                let cond = cond.generate_program(core, symtable);
+                let br = core.new_value(InstType::Branch(cond, body_block, next_block));
+
+                core.push_inst(br);
+                core.switch_block(body_block);
+                body.node.generate_program(core, symtable);
                 // TODO : return in while
-                let jump_to_cond = func_data
-                    .dfg_mut()
-                    .new_value()
-                    .jump(cond_block);
+                let jump_to_cond = core.new_value(InstType::Jump(cond_block));
+
                 let bb_examiner = BBExaminer::new();
-                if !bb_examiner.is_terminated(func_data, *block) {
-                    func_data.layout_mut().bb_mut(*block).insts_mut().push_key_back(jump_to_cond).unwrap();
+                if !bb_examiner.is_terminated(core, body_block) {
+                    core.push_inst(jump_to_cond);
                 }
-                *block = next_block;
-                context.pop_loop_bound();
+                core.context_mut().pop_loop_bound();
+                core.switch_block(next_block);
             }
             Stmt::Break(_span) => {
-                let loop_bound = context.get_loop_bound();
+                let loop_bound = core.context().get_loop_bound();
                 if !loop_bound.is_none() {
-                    let jump = func_data.dfg_mut().new_value().jump(loop_bound.unwrap().exit);
-                    func_data
-                        .layout_mut()
-                        .bb_mut(*block)
-                        .insts_mut()
-                        .push_key_back(jump)
-                        .unwrap();
+                    let jump = core.new_value(InstType::Jump(loop_bound.unwrap().exit));
+                    core.push_inst(jump);
                 }
             }
             Stmt::Continue(_span) => {
-                let loop_bound = context.get_loop_bound();
+                let loop_bound = core.context().get_loop_bound();
                 if !loop_bound.is_none() {
-                    let jump = func_data.dfg_mut().new_value().jump(loop_bound.unwrap().entry);
-                    func_data
-                        .layout_mut()
-                        .bb_mut(*block)
-                        .insts_mut()
-                        .push_key_back(jump)
-                        .unwrap();
+                    let jump = core.new_value(InstType::Jump(loop_bound.unwrap().entry));
+                    core.push_inst(jump);
                 }
             }
         }
@@ -456,528 +434,219 @@ impl Stmt {
 }
 
 impl Return {
-    pub fn generate_program(
-        self,
-        symtable: &mut SymTable,
-        func_data: &mut FunctionData,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) -> Value {
-        self.exp.generate_program(symtable, func_data, block, context)
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) -> Value {
+        self.exp.generate_program(core, symtable)
     }
 }
 
 impl Exp {
-    pub fn generate_program(
-        self,
-        symtable: &mut SymTable,
-        func_data: &mut FunctionData,
-        block: &mut BasicBlock,
-        context: &mut Context,
-    ) -> Value {
+    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) -> Value {
         match self {
             // 一元运算表达式
             Exp::UnaryExp { op, exp } => {
-                let expr = exp.generate_program(symtable, func_data, block, context);
+                let expr = exp.generate_program(core, symtable);
                 match op.node {
                     MyUnaryOp::Neg => {
                         // Neg转为0减，即二元运算
-                        let zero = func_data.dfg_mut().new_value().integer(0);
-                        let neg = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Sub, zero, expr);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(neg)
-                            .unwrap();
+                        let zero = core.new_int(0);
+                        let neg = core.new_value(InstType::Binary(BinaryOp::Sub, zero, expr));
+                        core.push_inst(neg);
                         neg
                     }
                     MyUnaryOp::Not => {
                         // 逻辑取反，和0比较相等
-                        let zero = func_data.dfg_mut().new_value().integer(0);
-                        let not = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Eq, zero, expr);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(not)
-                            .unwrap();
+                        let zero = core.new_int(0);
+                        let not = core.new_value(InstType::Binary(BinaryOp::Eq, zero, expr));
+                        core.push_inst(not);
                         not
                     }
                     MyUnaryOp::Pos => expr,
                 }
             }
             Exp::BinaryExp { op, exp1, exp2 } => {
-                let expr1 = exp1.generate_program(symtable, func_data, block, context);
-                let expr2 = exp2.generate_program(symtable, func_data, block, context);
+                let expr1 = exp1.generate_program(core, symtable);
+                let expr2 = exp2.generate_program(core, symtable);
                 match op.node {
                     MyBinaryOp::Add => {
-                        let add =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::Add, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(add)
-                            .unwrap();
+                        let add = core.new_value(InstType::Binary(BinaryOp::Add, expr1, expr2));
+                        core.push_inst(add);
                         add
                     }
                     MyBinaryOp::Sub => {
-                        let sub =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::Sub, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(sub)
-                            .unwrap();
+                        let sub = core.new_value(InstType::Binary(BinaryOp::Sub, expr1, expr2));
+                        core.push_inst(sub);
                         sub
                     }
                     MyBinaryOp::Mul => {
-                        let mul =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::Mul, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(mul)
-                            .unwrap();
+                        let mul = core.new_value(InstType::Binary(BinaryOp::Mul, expr1, expr2));
+                        core.push_inst(mul);
                         mul
                     }
                     MyBinaryOp::Div => {
-                        let div =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::Div, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(div)
-                            .unwrap();
+                        let div = core.new_value(InstType::Binary(BinaryOp::Div, expr1, expr2));
+                        core.push_inst(div);
                         div
                     }
                     MyBinaryOp::Mod => {
-                        let _mod =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::Mod, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(_mod)
-                            .unwrap();
+                        let _mod = core.new_value(InstType::Binary(BinaryOp::Mod, expr1, expr2));
+                        core.push_inst(_mod);
                         _mod
                     }
                     MyBinaryOp::Eq => {
-                        let eq = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Eq, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(eq)
-                            .unwrap();
+                        let eq = core.new_value(InstType::Binary(BinaryOp::Eq, expr1, expr2));
+                        core.push_inst(eq);
+
                         eq
                     }
                     MyBinaryOp::Ne => {
-                        let ne =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::NotEq, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(ne)
-                            .unwrap();
+                        let ne = core.new_value(InstType::Binary(BinaryOp::NotEq, expr1, expr2));
+                        core.push_inst(ne);
                         ne
                     }
                     MyBinaryOp::Lt => {
-                        let lt = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Lt, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(lt)
-                            .unwrap();
+                        let lt = core.new_value(InstType::Binary(BinaryOp::Lt, expr1, expr2));
+                        core.push_inst(lt);
                         lt
                     }
                     MyBinaryOp::Gt => {
-                        let gt = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Gt, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(gt)
-                            .unwrap();
+                        let gt = core.new_value(InstType::Binary(BinaryOp::Gt, expr1, expr2));
+                        core.push_inst(gt);
                         gt
                     }
                     MyBinaryOp::Le => {
-                        let le = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Le, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(le)
-                            .unwrap();
+                        let le = core.new_value(InstType::Binary(BinaryOp::Le, expr1, expr2));
+                        core.push_inst(le);
                         le
                     }
                     MyBinaryOp::Ge => {
-                        let ge = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::Ge, expr1, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(ge)
-                            .unwrap();
+                        let ge = core.new_value(InstType::Binary(BinaryOp::Ge, expr1, expr2));
+                        core.push_inst(ge);
                         ge
                     }
                     // 逻辑运算需要先转为0和1然后再进行运算
                     MyBinaryOp::LAnd => {
-                        // let zero = func_data.dfg_mut().new_value().integer(0);
-                        // let and1 =
-                        //     func_data
-                        //         .dfg_mut()
-                        //         .new_value()
-                        //         .binary(BinaryOp::NotEq, zero, expr1);
-                        // let and2 =
-                        //     func_data
-                        //         .dfg_mut()
-                        //         .new_value()
-                        //         .binary(BinaryOp::NotEq, zero, expr2);
-                        // let and = func_data
-                        //     .dfg_mut()
-                        //     .new_value()
-                        //     .binary(BinaryOp::And, and1, and2);
-                        // func_data
-                        //     .layout_mut()
-                        //     .bb_mut(*block)
-                        //     .insts_mut()
-                        //     .push_key_back(and1)
-                        //     .unwrap();
-                        // func_data
-                        //     .layout_mut()
-                        //     .bb_mut(*block)
-                        //     .insts_mut()
-                        //     .push_key_back(and2)
-                        //     .unwrap();
-                        // func_data
-                        //     .layout_mut()
-                        //     .bb_mut(*block)
-                        //     .insts_mut()
-                        //     .push_key_back(and)
-                        //     .unwrap();
-                        // and
-
                         // 实现短路求值
-                        let result = func_data.dfg_mut().new_value().alloc(Type::get_i32());
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(result)
-                            .unwrap();
-                        let zero = func_data.dfg_mut().new_value().integer(0);
-                        let one = func_data.dfg_mut().new_value().integer(1);
+                        let result = core.new_value(InstType::Alloc(Type::get_i32()));
+                        core.push_inst(result);
+                        let zero = core.new_int(0);
+                        let one = core.new_int(1);
 
-                        let store = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .store(zero,result);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(store)
-                            .unwrap();
+                        let store = core.new_value(InstType::Store(zero, result));
+                        core.push_inst(store);
 
-                        let and1 =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::NotEq, zero, expr1);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(and1)
-                            .unwrap();
-                        let and2_block = func_data.dfg_mut().new_bb().basic_block(None);
-                        let and2_next_block = func_data.dfg_mut().new_bb().basic_block(None);
-                        let merge_block = func_data.dfg_mut().new_bb().basic_block(None);
-                        func_data
-                            .layout_mut()
-                            .bbs_mut()
-                            .extend([and2_block, and2_next_block, merge_block]);
-                        let br = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .branch(and1, and2_block, merge_block);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(br)
-                            .unwrap();
-                        let and2 = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::NotEq, zero, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(and2_block)
-                            .insts_mut()
-                            .push_key_back(and2)
-                            .unwrap();
-                        let br = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .branch(and2, and2_next_block, merge_block);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(and2_block)
-                            .insts_mut()
-                            .push_key_back(br)
-                            .unwrap();
-                        let store = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .store(one, result);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(and2_next_block)
-                            .insts_mut()
-                            .push_key_back(store)
-                            .unwrap();
-                        let jump = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .jump(merge_block);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(and2_next_block)
-                            .insts_mut()
-                            .push_key_back(jump)
-                            .unwrap();
-                        *block = merge_block;
-                        let load = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .load(result);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(load)
-                            .unwrap();
+                        let and1 = core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr1));
+                        core.push_inst(and1);
+                        let and2_block = core.new_block(None);
+                        let and2_next_block = core.new_block(None);
+                        let merge_block = core.new_block(None);
+                        core.push_blocks(vec![and2_block, and2_next_block, merge_block]);
+
+                        let br = core.new_value(InstType::Branch(and1, and2_block, merge_block));
+                        core.push_inst(br);
+
+                        let and2 = core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr2));
+                        core.switch_block(and2_block);
+                        core.push_inst(and2);
+                        let br =
+                            core.new_value(InstType::Branch(and2, and2_next_block, merge_block));
+                        core.push_inst(br);
+
+                        let store = core.new_value(InstType::Store(one, result));
+                        core.switch_block(and2_next_block);
+                        core.push_inst(store);
+
+                        let jump = core.new_value(InstType::Jump(merge_block));
+                        core.push_inst(jump);
+
+                        core.switch_block(merge_block);
+                        let load = core.new_value(InstType::Load(result));
+                        core.push_inst(load);
                         load
-
-
-
                     }
                     MyBinaryOp::LOr => {
-                        // let zero = func_data.dfg_mut().new_value().integer(0);
-                        // let or1 =
-                        //     func_data
-                        //         .dfg_mut()
-                        //         .new_value()
-                        //         .binary(BinaryOp::NotEq, zero, expr1);
-                        // let or2 =
-                        //     func_data
-                        //         .dfg_mut()
-                        //         .new_value()
-                        //         .binary(BinaryOp::NotEq, zero, expr2);
-                        // let or = func_data
-                        //     .dfg_mut()
-                        //     .new_value()
-                        //     .binary(BinaryOp::Or, or1, or2);
-                        // func_data
-                        //     .layout_mut()
-                        //     .bb_mut(*block)
-                        //     .insts_mut()
-                        //     .push_key_back(or1)
-                        //     .unwrap();
-                        // func_data
-                        //     .layout_mut()
-                        //     .bb_mut(*block)
-                        //     .insts_mut()
-                        //     .push_key_back(or2)
-                        //     .unwrap();
-                        // func_data
-                        //     .layout_mut()
-                        //     .bb_mut(*block)
-                        //     .insts_mut()
-                        //     .push_key_back(or)
-                        //     .unwrap();
-                        // or
-                        let result = func_data.dfg_mut().new_value().alloc(Type::get_i32());
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(result)
-                            .unwrap();
-                        let zero = func_data.dfg_mut().new_value().integer(0);
-                        let one = func_data.dfg_mut().new_value().integer(1);
-                        let store = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .store(one,result);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(store)
-                            .unwrap();
-                        let or2_block = func_data.dfg_mut().new_bb().basic_block(None);
-                        let or2_next_block = func_data.dfg_mut().new_bb().basic_block(None);
-                        let merge_block = func_data.dfg_mut().new_bb().basic_block(None);
-                        func_data
-                            .layout_mut()
-                            .bbs_mut()
-                            .extend([or2_block, or2_next_block, merge_block]);
+                        let result = core.new_value(InstType::Alloc(Type::get_i32()));
+                        core.push_inst(result);
+
+                        let zero = core.new_int(0);
+                        let one = core.new_int(1);
+                        let store = core.new_value(InstType::Store(one, result));
+                        core.push_inst(store);
+
+                        let or2_block = core.new_block(None);
+                        let or2_next_block = core.new_block(None);
+                        let merge_block = core.new_block(None);
+                        core.push_blocks(vec![or2_block, or2_next_block, merge_block]);
+
                         let or1 =
-                            func_data
-                                .dfg_mut()
-                                .new_value()
-                                .binary(BinaryOp::NotEq, zero, expr1);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(or1)
-                            .unwrap();
-                        let br = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .branch(or1, merge_block, or2_block);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(br)
-                            .unwrap();
-                        let or2 = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .binary(BinaryOp::NotEq, zero, expr2);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(or2_block)
-                            .insts_mut()
-                            .push_key_back(or2)
-                            .unwrap();
-                        let br = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .branch(or2, merge_block, or2_next_block);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(or2_block)
-                            .insts_mut()
-                            .push_key_back(br)
-                            .unwrap();
-                        let store = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .store(zero, result);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(or2_next_block)
-                            .insts_mut()
-                            .push_key_back(store)
-                            .unwrap();
-                        let jump = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .jump(merge_block);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(or2_next_block)
-                            .insts_mut()
-                            .push_key_back(jump)
-                            .unwrap();
-                        *block = merge_block;
-                        let load = func_data
-                            .dfg_mut()
-                            .new_value()
-                            .load(result);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(load)
-                            .unwrap();
+                            core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr1));
+                        core.push_inst(or1);
+
+                        let br = core.new_value(InstType::Branch(or1, merge_block, or2_block));
+
+                        core.push_inst(br);
+
+                        let or2 =
+                            core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr2));
+                        core.switch_block(or2_block);
+                        core.push_inst(or2);
+
+                        let br = core.new_value(InstType::Branch(or2, merge_block, or2_next_block));
+                        core.push_inst(br);
+
+                        let store = core.new_value(InstType::Store(zero, result));
+                        core.switch_block(or2_next_block);
+                        core.push_inst(store);
+
+                        let jump = core.new_value(InstType::Jump(merge_block));
+                        core.push_inst(jump);
+                        
+                        core.switch_block(merge_block);
+                        let load = core.new_value(InstType::Load(result));
+                        core.push_inst(load);
+
                         load
                     }
                 }
             }
-            Exp::Number(n) => func_data.dfg_mut().new_value().integer(n.node),
+            Exp::Number(n) => core.new_int(n.node),
 
             Exp::LVar(name) => {
                 let var = symtable.get(&name.node);
                 let var = match var {
                     Some(Symbol::Var(var)) => {
-                        let load = func_data.dfg_mut().new_value().load(*var);
-                        func_data
-                            .layout_mut()
-                            .bb_mut(*block)
-                            .insts_mut()
-                            .push_key_back(load)
-                            .unwrap();
+                        let load = core.new_value(InstType::Load(*var));
+                        core.push_inst(load);
                         load
                     }
-                    Some(Symbol::Const(n)) => func_data.dfg_mut().new_value().integer(*n),
-                    None => panic!("variable not found"),
+                    Some(Symbol::Const(n)) => core.new_int(*n),
+
+                    Some(Symbol::Func(_)) => unreachable!("cannot use a function as a variable"),
+
+                    None => panic!("variable not found,start:{},end:{}", name.start, name.end),
                 };
                 var
+            }
+            Exp::Call(call) => {
+                // TODO: Error handling
+                let func = symtable.get(&call.node.ident.node).unwrap();
+                let func = match func{
+                    Symbol::Func(func) => *func,
+                    _ => unreachable!("cannot call a variable"),
+                };
+                let args = call.node.args.into_iter().map(|arg| arg.generate_program(core, symtable)).collect();
+                let call = core.new_value(InstType::Call(func, args));
+                core.push_inst(call);
+                call
             }
         }
     }
     pub fn calculate_const(
         self,
-        func_data: &mut FunctionData,
         symtable: &mut SymTable,
-        block: &mut BasicBlock,
-        context: &mut Context,
     ) -> i32 {
         match self {
             Exp::UnaryExp { op, exp } => {
-                let exp = exp.calculate_const(func_data, symtable, block, context);
+                let exp = exp.calculate_const(symtable);
                 match op.node {
                     MyUnaryOp::Neg => -exp,
                     MyUnaryOp::Not => {
@@ -991,8 +660,8 @@ impl Exp {
                 }
             }
             Exp::BinaryExp { op, exp1, exp2 } => {
-                let exp1 = exp1.calculate_const(func_data, symtable, block, context);
-                let exp2 = exp2.calculate_const(func_data, symtable, block, context);
+                let exp1 = exp1.calculate_const(symtable);
+                let exp2 = exp2.calculate_const(symtable);
                 match op.node {
                     MyBinaryOp::Add => exp1 + exp2,
                     MyBinaryOp::Sub => exp1 - exp2,
@@ -1063,10 +732,12 @@ impl Exp {
                 let var = match var {
                     Some(Symbol::Var(_)) => panic!("cannot use a variable as a const"),
                     Some(Symbol::Const(n)) => *n,
+                    Some(Symbol::Func(_)) => unreachable!("cannot use a function as a variable"),
                     None => panic!("variable not found"),
                 };
                 var
             }
+            Exp::Call(_) => unreachable!("cannot call a function in a const expression"),
         }
     }
 }

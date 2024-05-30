@@ -14,15 +14,39 @@ match {
   _
 }
 
-pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
+pub CompUnit: CompUnit = <global_items:GlobalItem*> => CompUnit { global_items: global_items.into() };
+
+GlobalItem: GlobalItem = {
+    <func_def: FuncDef> => GlobalItem::FuncDef(<>),
+    <decl: Decl> => GlobalItem::Decl(<>),
+}
 
 FuncDef: FuncDef = {
-  <func_type: FuncType> <ident: Ident> "(" ")" <block: Block> => {
-    FuncDef { ident, block, func_type }
+  <func_type: BType> <ident: Ident> "(" <params:FuncParams?> ")" <block: Block> => {
+    let params = params.unwrap_or_default();
+
+    FuncDef { ident, block,params:params.into(), func_type }
   }
 }
 
-FuncType: Span<FuncType> = <start:@L> "int" <end:@R> => FuncType::Int.into_span(start, end);
+FuncParams: Vec<Span<FuncParam>> = {
+    <param: FuncParam> => vec![param],
+    <params: FuncParams> "," <param: FuncParam> => {
+        let mut params = params;
+        params.push(param);
+        params
+    }
+}
+
+FuncParam: Span<FuncParam> = {
+    <start:@L> <ty:BType> <ident:Ident> <end:@R> => Span{node: FuncParam{ty,ident}, start, end}
+}
+
+// 出现移进规约冲突，不再使用FuncType
+// FuncType: Span<FuncType> = {
+//     <start:@L> "int" <end:@R> => FuncType::Int.into_span(start, end),
+//     <start:@L> "void" <end:@R> => FuncType::Void.into_span(start, end),
+// }
 
 Block: Span<Block> = {
     <start:@L> "{" <items: BlockItem*> "}" <end:@R> => {
@@ -65,7 +89,10 @@ Decl: Decl = {
     <const_decl: ConstDecl> => Decl::Const(<>),
 }
 
-BType: Span<BType> = <start:@L> "int" <end:@R> => BType::Int.into_span(start, end);
+BType: Span<BType> = {
+    <start:@L> "int" <end:@R> => BType::Int.into_span(start, end),
+    <start:@L> "void" <end:@R> => BType::Void.into_span(start, end),
+}
 
 VarDecl: Span<VarDecl> = {
     <start:@L> <ty:BType> <mut defs:(<VarDef> ",")*> <def: VarDef> ";" <end:@R> => {
@@ -143,7 +170,24 @@ PrimaryExp: Exp = {
 UnaryExp: Exp = {
     <primary_exp: PrimaryExp> => <>,
     <unary_op: UnaryOp> <unary_exp:UnaryExp> => Exp::UnaryExp{op:unary_op, exp:Box::new(unary_exp)},
+    <call: CallExp> => Exp::Call(call),
     
+}
+
+CallExp: Span<CallExp> = {
+    <start:@L> <ident:Ident> "(" <args:FuncArgs?> ")" <end:@R> => {
+        let args = args.unwrap_or_default();
+        CallExp { ident, args:args.into() }.into_span(start, end)
+    }
+}
+
+FuncArgs: Vec<Exp> = {
+    <exp:Exp> => vec![exp],
+    <args:FuncArgs> "," <exp:Exp> => {
+        let mut args = args;
+        args.push(exp);
+        args
+    }
 }
 
 UnaryOp: Span<MyUnaryOp> = {

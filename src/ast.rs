@@ -7,24 +7,45 @@ use std::ops::Range;
 
 #[derive(Debug)]
 pub struct CompUnit {
-    pub func_def: FuncDef,
+    pub global_items: Vec<GlobalItem>,
 }
 
 impl Spanned for CompUnit{
     fn start_pos(&self)->usize{
-        self.func_def.start_pos()
+        self.global_items.first().unwrap().start_pos()
     }
     fn end_pos(&self)->usize{
-        self.func_def.end_pos()
+        self.global_items.last().unwrap().end_pos()
+    }
+}
+
+#[derive(Debug,Clone)]
+pub enum GlobalItem{
+    Decl(Decl),
+    FuncDef(FuncDef),
+}
+
+impl Spanned for GlobalItem{
+    fn start_pos(&self)->usize{
+        match self{
+            GlobalItem::Decl(decl)=>decl.start_pos(),
+            GlobalItem::FuncDef(func_def)=>func_def.start_pos(),
+        }
+    }
+    fn end_pos(&self)->usize{
+        match self{
+            GlobalItem::Decl(decl)=>decl.end_pos(),
+            GlobalItem::FuncDef(func_def)=>func_def.end_pos(),
+        }
     }
 }
 
 
-
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct FuncDef {
-    pub func_type: Span<FuncType>,
+    pub func_type: Span<BType>,
     pub ident: Span<String>,
+    pub params: Vec<Span<FuncParam>>,
     pub block: Span<Block>,
 }
 
@@ -37,13 +58,29 @@ impl Spanned for FuncDef{
     }
 }
 
+/// deprecated because of the existence of BType
+// #[derive(Debug,Clone)]
+// pub enum FuncType {
+//     Int,
+//     Void,
+// }
+
+// impl NonSpanned for FuncType{}
+
 #[derive(Debug,Clone)]
-pub enum FuncType {
-    Int,
+pub struct FuncParam {
+    pub ty: Span<BType>,
+    pub ident: Span<String>,
 }
 
-impl NonSpanned for FuncType{}
-
+impl Spanned for FuncParam{
+    fn start_pos(&self)->usize{
+        self.ty.start_pos()
+    }
+    fn end_pos(&self)->usize{
+        self.ident.end_pos()
+    }
+}
 
 #[derive(Debug,Clone)]
 pub struct Block{
@@ -160,6 +197,7 @@ impl Spanned for InitVal{
 #[derive(Debug,Clone)]
 pub enum BType{
     Int,
+    Void,
 }
 
 impl NonSpanned for BType{}
@@ -228,6 +266,7 @@ pub enum Exp{
     },
     Number(Span<i32>),
     LVar(Span<String>),
+    Call(Span<CallExp>),
 }
 
 impl Spanned for Exp{
@@ -237,6 +276,7 @@ impl Spanned for Exp{
             Exp::BinaryExp{op: _,exp1,exp2:_}=>exp1.start_pos(),
             Exp::Number(num)=>num.start_pos(),
             Exp::LVar(ident)=>ident.start_pos(),
+            Exp::Call(call_exp)=>call_exp.start_pos(),
         }
     }
     fn end_pos(&self)->usize{
@@ -245,9 +285,19 @@ impl Spanned for Exp{
             Exp::BinaryExp{op: _,exp1: _,exp2}=>exp2.end_pos(),
             Exp::Number(num)=>num.end_pos(),
             Exp::LVar(ident)=>ident.end_pos(),
+            Exp::Call(call_exp)=>call_exp.end_pos(),
         }
     }
 }
+
+#[derive(Debug,Clone)]
+pub struct CallExp{
+    pub ident: Span<String>,
+    pub args: Vec<Exp>,
+
+}
+
+impl NonSpanned for CallExp{}
 
 
 
