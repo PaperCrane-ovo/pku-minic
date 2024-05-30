@@ -317,8 +317,6 @@ impl Stmt {
                 let br = core.new_value(InstType::Branch(cond, then_block, else_block));
                 core.push_inst(br);
 
-                // let mut then_ret = false;
-                // let mut else_ret = false;
 
                 // then
                 core.switch_block(then_block);
@@ -329,27 +327,6 @@ impl Stmt {
                     let br = core.new_value(InstType::Jump(merge_block));
                     core.push_inst(br);
                 }
-                // let dfg = func_data.dfg();
-                // let layout = func_data.layout(); // 获取 func_data 的可变引用
-                // let insts = layout.bbs().node(&then_block).unwrap().insts();
-
-                // for i in insts.iter() {
-                //     match dfg.value(*i.0).kind() {
-                //         ValueKind::Return(_) => {
-                //             then_ret = true;
-                //             break;
-                //         }
-                //         _ => {}
-                //     }
-                // }
-                // if !then_ret {
-                //     let br = func_data.dfg_mut().new_value().jump(merge_block);
-                //     func_data
-                //         .layout_mut()
-                //         .bb_mut(then_block)
-                //         .insts_mut()
-                //         .extend([br]);
-                // }
 
                 // else
                 if let Some(els) = els {
@@ -362,29 +339,7 @@ impl Stmt {
                     core.switch_block(else_block);
                     core.push_inst(br);
                 }
-
-                // let dfg = func_data.dfg();
-                // let layout = func_data.layout(); // 获取 func_data 的可变引用
-                // let insts = layout.bbs().node(&else_block).unwrap().insts();
-
-                // for i in insts.iter() {
-                //     match dfg.value(*i.0).kind() {
-                //         ValueKind::Return(_) => {
-                //             else_ret = true;
-                //             break;
-                //         }
-                //         _ => {}
-                //     }
-                // }
-                // if !else_ret {
-                //     let br = func_data.dfg_mut().new_value().jump(merge_block);
-                //     func_data
-                //         .layout_mut()
-                //         .bb_mut(else_block)
-                //         .insts_mut()
-                //         .extend([br]);
-                // }
-
+                
                 // merge
                 core.switch_block(merge_block);
             }
