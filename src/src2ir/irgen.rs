@@ -323,20 +323,20 @@ impl Stmt {
                 then.node.generate_program(core, symtable);
 
                 let bb_examiner = BBExaminer::new();
-                if !bb_examiner.is_terminated(core, then_block) {
+                if !bb_examiner.is_terminated(core, core.block) {
                     let br = core.new_value(InstType::Jump(merge_block));
                     core.push_inst(br);
                 }
 
                 // else
+                core.switch_block(else_block);
+
                 if let Some(els) = els {
-                    core.switch_block(else_block);
                     els.node.generate_program(core, symtable);
                 }
 
-                if !bb_examiner.is_terminated(core, else_block) {
+                if !bb_examiner.is_terminated(core, core.block) {
                     let br = core.new_value(InstType::Jump(merge_block));
-                    core.switch_block(else_block);
                     core.push_inst(br);
                 }
                 
@@ -364,7 +364,7 @@ impl Stmt {
                 let jump_to_cond = core.new_value(InstType::Jump(cond_block));
 
                 let bb_examiner = BBExaminer::new();
-                if !bb_examiner.is_terminated(core, body_block) {
+                if !bb_examiner.is_terminated(core, core.block) {
                     core.push_inst(jump_to_cond);
                 }
                 core.context_mut().pop_loop_bound();
@@ -419,65 +419,8 @@ impl Exp {
                 }
             }
             Exp::BinaryExp { op, exp1, exp2 } => {
-                let expr1 = exp1.generate_program(core, symtable);
-                let expr2 = exp2.generate_program(core, symtable);
-                match op.node {
-                    MyBinaryOp::Add => {
-                        let add = core.new_value(InstType::Binary(BinaryOp::Add, expr1, expr2));
-                        core.push_inst(add);
-                        add
-                    }
-                    MyBinaryOp::Sub => {
-                        let sub = core.new_value(InstType::Binary(BinaryOp::Sub, expr1, expr2));
-                        core.push_inst(sub);
-                        sub
-                    }
-                    MyBinaryOp::Mul => {
-                        let mul = core.new_value(InstType::Binary(BinaryOp::Mul, expr1, expr2));
-                        core.push_inst(mul);
-                        mul
-                    }
-                    MyBinaryOp::Div => {
-                        let div = core.new_value(InstType::Binary(BinaryOp::Div, expr1, expr2));
-                        core.push_inst(div);
-                        div
-                    }
-                    MyBinaryOp::Mod => {
-                        let _mod = core.new_value(InstType::Binary(BinaryOp::Mod, expr1, expr2));
-                        core.push_inst(_mod);
-                        _mod
-                    }
-                    MyBinaryOp::Eq => {
-                        let eq = core.new_value(InstType::Binary(BinaryOp::Eq, expr1, expr2));
-                        core.push_inst(eq);
 
-                        eq
-                    }
-                    MyBinaryOp::Ne => {
-                        let ne = core.new_value(InstType::Binary(BinaryOp::NotEq, expr1, expr2));
-                        core.push_inst(ne);
-                        ne
-                    }
-                    MyBinaryOp::Lt => {
-                        let lt = core.new_value(InstType::Binary(BinaryOp::Lt, expr1, expr2));
-                        core.push_inst(lt);
-                        lt
-                    }
-                    MyBinaryOp::Gt => {
-                        let gt = core.new_value(InstType::Binary(BinaryOp::Gt, expr1, expr2));
-                        core.push_inst(gt);
-                        gt
-                    }
-                    MyBinaryOp::Le => {
-                        let le = core.new_value(InstType::Binary(BinaryOp::Le, expr1, expr2));
-                        core.push_inst(le);
-                        le
-                    }
-                    MyBinaryOp::Ge => {
-                        let ge = core.new_value(InstType::Binary(BinaryOp::Ge, expr1, expr2));
-                        core.push_inst(ge);
-                        ge
-                    }
+                match op.node {
                     // 逻辑运算需要先转为0和1然后再进行运算
                     MyBinaryOp::LAnd => {
                         // 实现短路求值
@@ -489,6 +432,7 @@ impl Exp {
                         let store = core.new_value(InstType::Store(zero, result));
                         core.push_inst(store);
 
+                        let expr1 = exp1.generate_program(core, symtable);
                         let and1 = core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr1));
                         core.push_inst(and1);
                         let and2_block = core.new_block(None);
@@ -499,8 +443,10 @@ impl Exp {
                         let br = core.new_value(InstType::Branch(and1, and2_block, merge_block));
                         core.push_inst(br);
 
-                        let and2 = core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr2));
+                        
                         core.switch_block(and2_block);
+                        let expr2 = exp2.generate_program(core, symtable);
+                        let and2 = core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr2));
                         core.push_inst(and2);
                         let br =
                             core.new_value(InstType::Branch(and2, and2_next_block, merge_block));
@@ -532,6 +478,7 @@ impl Exp {
                         let merge_block = core.new_block(None);
                         core.push_blocks(vec![or2_block, or2_next_block, merge_block]);
 
+                        let expr1 = exp1.generate_program(core, symtable);
                         let or1 =
                             core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr1));
                         core.push_inst(or1);
@@ -540,9 +487,11 @@ impl Exp {
 
                         core.push_inst(br);
 
+
+                        core.switch_block(or2_block);
+                        let expr2 = exp2.generate_program(core, symtable);
                         let or2 =
                             core.new_value(InstType::Binary(BinaryOp::NotEq, zero, expr2));
-                        core.switch_block(or2_block);
                         core.push_inst(or2);
 
                         let br = core.new_value(InstType::Branch(or2, merge_block, or2_next_block));
@@ -560,6 +509,28 @@ impl Exp {
                         core.push_inst(load);
 
                         load
+                    }
+                    _ => {
+                        let expr1 = exp1.generate_program(core, symtable);
+                        let expr2 = exp2.generate_program(core, symtable);
+                        let bin_op = match op.node {
+                            MyBinaryOp::Add => BinaryOp::Add,
+                            MyBinaryOp::Sub => BinaryOp::Sub,
+                            MyBinaryOp::Mul => BinaryOp::Mul,
+                            MyBinaryOp::Div => BinaryOp::Div,
+                            MyBinaryOp::Mod => BinaryOp::Mod,
+                            MyBinaryOp::Eq => BinaryOp::Eq,
+                            MyBinaryOp::Ne => BinaryOp::NotEq,
+                            MyBinaryOp::Lt => BinaryOp::Lt,
+                            MyBinaryOp::Gt => BinaryOp::Gt,
+                            MyBinaryOp::Le => BinaryOp::Le,
+                            MyBinaryOp::Ge => BinaryOp::Ge,
+                            _ => unreachable!(),
+                        };
+                        let bin = core.new_value(InstType::Binary(bin_op, expr1, expr2));
+                        core.push_inst(bin);
+                        bin
+                    
                     }
                 }
             }

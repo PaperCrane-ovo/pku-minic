@@ -26,14 +26,14 @@ impl BBExaminer {
         let layout = core.layout_mut();
         let blocks = layout.bbs_mut().iter();
         for block in blocks {
-            if block.1.insts().is_empty() {
-                vector.push(*block.0);
-            }
+            vector.push(*block.0);
         }
         for block in vector {
-            core.temporarily_use_block(block, |core| {
-                core.push_inst(ret);
-            });
+            if !self.is_terminated(core, block) {
+                core.temporarily_use_block(block, |core| {
+                    core.push_inst(ret);
+                });
+            }
         }
     }
     pub fn examine_bb_name(&self, core: &mut Core) {
