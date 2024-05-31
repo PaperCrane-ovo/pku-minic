@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use super::{imm::I12, register::RegId};
+#[allow(unused)]
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum RiscvInst{

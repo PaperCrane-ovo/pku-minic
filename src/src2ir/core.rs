@@ -6,7 +6,7 @@ use crate::ast::BType;
 
 use super::context::Context;
 
-
+#[allow(unused)]
 
 pub struct Core<'a,'b>{
     pub func_data:&'a mut FunctionData,

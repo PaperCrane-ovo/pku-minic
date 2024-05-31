@@ -80,24 +80,24 @@ impl Display for RegId{
     }
 }
 
-pub struct RegCache{
-    pub cache: HashMap<Value,RegId>,
+// pub struct RegCache{
+//     pub cache: HashMap<Value,RegId>,
 
-}
+// }
 
-impl RegCache{
-    pub fn new() -> Self{
-        RegCache{
-            cache: HashMap::new(),
-        }
-    }
-    pub fn insert(&mut self, value: Value, reg: RegId){
-        self.cache.insert(value, reg);
-    }
-    pub fn get(&self, value: Value) -> RegId{
-        *self.cache.get(&value).unwrap()
-    }
-    pub fn remove(&mut self, value: Value){
-        self.cache.remove(&value);
-    }
-}
+// impl RegCache{
+//     pub fn new() -> Self{
+//         RegCache{
+//             cache: HashMap::new(),
+//         }
+//     }
+//     pub fn insert(&mut self, value: Value, reg: RegId){
+//         self.cache.insert(value, reg);
+//     }
+//     pub fn get(&self, value: Value) -> RegId{
+//         *self.cache.get(&value).unwrap()
+//     }
+//     pub fn remove(&mut self, value: Value){
+//         self.cache.remove(&value);
+//     }
+// }

@@ -116,52 +116,7 @@ impl GenerateAsmBlock for BasicBlock {
     }
 }
 
-// 既然实现了ValueData还要实现Value，不如直接实现Value
 
-// impl GenerateAsm for ValueData{
-//     fn generate (&self,asm: &mut String) {
-//         match self.kind(){
-//             ValueKind::Integer(i) => {
-//                 asm.push_str(&format!("    li a0, {}\n", i.value()));
-//             }
-//             ValueKind::Return(ret) => {
-//                 if let Some(ret_value) = ret.value(){
-//                     ret_value.generate(asm);
-//                 }
-//                 asm.push_str(&format!("    ret\n"));
-//             }
-//             _ => {}
-//         }
-//     }
-// }
-
-// impl GenerateAsm for Value{
-//     fn generate (&self,asm: &mut String) {
-//         match self.kind(){
-//             ValueKind::Integer(i) => {
-//                 asm.push_str(&format!("    li a0, {}\n", i.value()));
-//             }
-//             _ => {}
-//         }
-//     }
-// }
-
-fn op_to_riscv(op: BinaryOp) -> &'static str {
-    match op {
-        BinaryOp::Add => "add",
-        BinaryOp::Sub => "sub",
-        BinaryOp::Mul => "mul",
-        BinaryOp::Div => "div",
-        BinaryOp::Mod => "rem",
-        BinaryOp::And => "and",
-        BinaryOp::Or => "or",
-        BinaryOp::Xor => "xor",
-        BinaryOp::Gt => "sgt",
-        BinaryOp::Lt => "slt",
-
-        _ => "unknown",
-    }
-}
 
 impl GenerateAsmValue for Value {
     fn generate(&self, asm: &mut AsmProgram, dfg: &DataFlowGraph, stack_frame: &mut StackFrame) {

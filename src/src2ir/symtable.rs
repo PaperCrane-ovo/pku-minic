@@ -2,6 +2,8 @@ use std::{collections::HashMap, hash::Hash};
 
 use koopa::ir::{Function, Value};
 
+#[allow(unused)]
+
 /// 符号表的实现
 
 pub enum Symbol{

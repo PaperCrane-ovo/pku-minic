@@ -20,6 +20,7 @@ enum Mode {
 }
 
 fn main() -> Result<()> {
+    // unsafe{backtrace_on_stack_overflow::enable()}
     // 解析命令行参数
     let mut args = args();
     args.next();

@@ -5,7 +5,10 @@ use crate::ast::BType;
 
 use super::core::{Core, InstType};
 
+#[allow(unused)]
+
 /// This module is responsible for examining the basic blocks to make sure that they are all ending with a terminator instruction.
+
 pub struct BBExaminer {}
 impl BBExaminer {
     pub fn new() -> Self {

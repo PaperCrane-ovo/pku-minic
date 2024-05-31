@@ -271,7 +271,6 @@ impl Stmt {
                 };
 
                 let exp = exp.generate_program(core, symtable);
-                dbg!(ident.start_pos(),ident.end_pos());
                 let store = core.new_value(InstType::Store(exp, var));
                 core.push_inst(store);
             }
