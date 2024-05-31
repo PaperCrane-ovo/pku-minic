@@ -96,29 +96,7 @@ impl FuncDef {
         self.block.node.generate_program(&mut core, symtable);
         symtable.pop();
 
-        // a temporary fix to remove all insts after ret
-        // let dfg = func_data.dfg();
 
-        // let layout = func_data.layout(); // 获取 func_data 的可变引用
-        // let insts = layout.bbs().node(&entry).unwrap().insts();
-
-        // let mut it: Option<Value> = None;
-
-        // for i in insts.iter() {
-        //     match dfg.value(*i.0).kind() {
-        //         ValueKind::Return(_) => {
-        //             it = Some(*i.0);
-        //             break;
-        //         }
-        //         _ => {}
-        //     }
-        // }
-
-        // let insts = func_data.layout_mut().bb_mut(entry).insts_mut();
-
-        // while *insts.back_key().unwrap() != it.unwrap() {
-        //     insts.pop_back();
-        // }
         let bb_examiner = BBExaminer::new();
         // bb_examiner.examine_ret(&mut core);
         bb_examiner.examine_bb_name(&mut core);
