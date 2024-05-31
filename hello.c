@@ -1,18 +1,28 @@
-int x, y;
+int a,b,c,d;
+int n,m;
+int k;
+const int m = 0;
+const int n = 1;
+const int k = 2;
+const int gcd = 3;
 
-int t() {
-  x = x + 1;
-  return 1;
+int gcd(int m, int n)
+{
+    if (n == 0) {
+        return m;
+    }
+    k = 3;
+    return gcd(n, m % n);
 }
 
-int f() {
-  y = y + 1;
-  return 0;
-}
+int main()
+{
+    int k = getint();
+    while (k > 0) {
+        int a = getint(), b = getint();
+        putint(gcd(a, b)); putch(10);
+        k = k - 1;
 
-int main() {
-  int sum = 0;
-  sum = sum + (f() || f());
-  
-  return sum;
+    }
+    return 0;
 }

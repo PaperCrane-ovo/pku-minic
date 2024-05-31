@@ -1,5 +1,10 @@
-global @x = alloc i32, zeroinit
-global @y = alloc i32, zeroinit
+global @a = alloc i32, zeroinit
+global @b = alloc i32, zeroinit
+global @c = alloc i32, zeroinit
+global @d = alloc i32, zeroinit
+global @n = alloc i32, zeroinit
+global @m = alloc i32, zeroinit
+global @k = alloc i32, zeroinit
 
 decl @getint(): i32
 
@@ -17,45 +22,61 @@ decl @starttime()
 
 decl @stoptime()
 
-fun @t(): i32 {
+fun @gcd(@m_0: i32, @n_0: i32): i32 {
 %entry:
-  %0 = load @x
-  %1 = add %0, 1
-  store %1, @x
-  ret 1
-}
+  %m = alloc i32
+  store @m_0, %m
+  %n = alloc i32
+  store @n_0, %n
+  %0 = load %n
+  %1 = eq %0, 0
+  br %1, %gcd_0, %gcd_1
 
-fun @f(): i32 {
-%entry:
-  %2 = load @y
-  %3 = add %2, 1
-  store %3, @y
-  ret 0
+%gcd_0:
+  %2 = load %m
+  ret %2
+
+%gcd_1:
+  jump %gcd_2
+
+%gcd_2:
+  %3 = load %n
+  %4 = load %m
+  %5 = load %n
+  %6 = mod %4, %5
+  %7 = call @gcd(%3, %6)
+  ret %7
 }
 
 fun @main(): i32 {
 %entry:
-  %4 = alloc i32
-  store 0, %4
-  %5 = load %4
-  %6 = alloc i32
-  store 1, %6
-  %7 = call @f()
-  %8 = ne 0, %7
-  br %8, %main_2, %main_0
+  %8 = alloc i32
+  %9 = call @getint()
+  store %9, %8
+  jump %main_0
 
 %main_0:
-  %9 = ne 0, %10
-  br %9, %main_2, %main_1
+  %10 = load %8
+  %11 = gt %10, 0
+  br %11, %main_1, %main_2
 
 %main_1:
-  store 0, %6
-  jump %main_2
+  %12 = alloc i32
+  %13 = call @getint()
+  store %13, %12
+  %14 = alloc i32
+  %15 = call @getint()
+  store %15, %14
+  %16 = load %12
+  %17 = load %14
+  %18 = call @gcd(%16, %17)
+  call @putint(%18)
+  call @putch(10)
+  %19 = load %8
+  %20 = sub %19, 1
+  store %20, %8
+  jump %main_0
 
 %main_2:
-  %11 = load %6
-  %12 = add %5, %11
-  store %12, %4
-  %13 = load %4
-  ret %13
+  ret 0
 }

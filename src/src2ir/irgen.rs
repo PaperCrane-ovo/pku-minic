@@ -120,9 +120,9 @@ impl FuncDef {
         //     insts.pop_back();
         // }
         let bb_examiner = BBExaminer::new();
-        bb_examiner.examine_ret(&mut core);
+        // bb_examiner.examine_ret(&mut core);
         bb_examiner.examine_bb_name(&mut core);
-        BBExaminer::clean_all_extra_inst(&mut core);
+        // BBExaminer::clean_all_extra_inst(&mut core);
     }
 }
 
