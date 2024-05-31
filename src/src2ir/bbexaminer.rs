@@ -79,25 +79,25 @@ impl BBExaminer {
         terminated
     }
     
-    pub fn is_terminated_static(core:&mut Core, bb: BasicBlock) -> bool {
-        let layout = core.layout_mut();
-        let bb = layout.bb_mut(bb);
-        let mut terminated = false;
-        let mut vector = Vec::new();
-        for inst in bb.insts().iter() {
-            vector.push(*inst.0);
-        }
-        let dfg = core.dfg_mut();
-        for inst in vector {
-            match dfg.value(inst).kind() {
-                ValueKind::Return(_) | ValueKind::Branch(_) | ValueKind::Jump(_) => {
-                    terminated = true;
-                }
-                _ => {}
-            }
-        }
-        terminated
-    }
+    // pub fn is_terminated_static(core:&mut Core, bb: BasicBlock) -> bool {
+    //     let layout = core.layout_mut();
+    //     let bb = layout.bb_mut(bb);
+    //     let mut terminated = false;
+    //     let mut vector = Vec::new();
+    //     for inst in bb.insts().iter() {
+    //         vector.push(*inst.0);
+    //     }
+    //     let dfg = core.dfg_mut();
+    //     for inst in vector {
+    //         match dfg.value(inst).kind() {
+    //             ValueKind::Return(_) | ValueKind::Branch(_) | ValueKind::Jump(_) => {
+    //                 terminated = true;
+    //             }
+    //             _ => {}
+    //         }
+    //     }
+    //     terminated
+    // }
     pub fn clean_extra_inst(core:&mut Core, bb: BasicBlock) {
         let dfg = core.dfg();
 

@@ -1,6 +1,7 @@
+#![allow(dead_code)]
+
 use std::{fmt::Display, ops::Neg};
 
-#[allow(unused)]
 
 use super::{register::RegId, riscv::RiscvInst, riscvgen::AsmProgram};
 pub enum I12pos{

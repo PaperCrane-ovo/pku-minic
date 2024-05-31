@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{collections::HashMap, hash::Hash};
 
 use koopa::ir::{Function, Value};

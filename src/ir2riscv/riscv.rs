@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::fmt::Display;
 
 use super::{imm::I12, register::RegId};

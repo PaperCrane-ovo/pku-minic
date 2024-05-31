@@ -1,7 +1,8 @@
-use std::{collections::HashMap, fmt::Display};
+#![allow(dead_code)]
+use std::fmt::Display;
  // Add this import
 
-use koopa::ir::Value;
+
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

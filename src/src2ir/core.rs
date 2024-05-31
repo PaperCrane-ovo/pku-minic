@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use koopa::ir::{builder::{BasicBlockBuilder,  LocalInstBuilder, ValueBuilder}, dfg::DataFlowGraph, layout::Layout, BasicBlock, BinaryOp, Function, FunctionData, Type, Value};
 
 
