@@ -1,5 +1,4 @@
-global @x = alloc i32, zeroinit
-global @init = alloc i32, 1
+global @a = alloc i32, zeroinit
 
 decl @getint(): i32
 
@@ -19,7 +18,15 @@ decl @stoptime()
 
 fun @main(): i32 {
 %main_0:
-  %0 = load @x
-  call @putint(%0)
+  %0 = alloc i32
+  store 0, %0
+  store 1, @a
+  %1 = alloc i32
+  store 2, %1
+  store 3, @a
+  %2 = alloc i32
+  store 4, %2
+  %3 = load @a
+  call @putint(%3)
   ret 0
 }
