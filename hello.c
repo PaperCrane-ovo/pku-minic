@@ -1,16 +1,7 @@
-int a;
-
-void k() {
-	a = 5;
-	return;
+int a(int a1,int a2,int a3,int a4){
+	return a1+a2;
 }
 
-int main() {
-	{int a = 0;}
-	a = 1;
-	{int a = 2;}
-	a = 3;
-	{int a = 4;}
-	putint(a);
-	return 0;
+int b(int b1,int b2){
+	return a(b1,b2);
 }

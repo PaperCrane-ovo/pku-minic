@@ -75,6 +75,10 @@ impl StackFrame{
         self.frame.insert(value, self.param_pos);
         self.param_pos += 4;
     }
+    pub fn clean_param(&mut self){
+        self.frame.retain(|_,&mut pos| pos >= self.param_pos);
+        self.param_pos = 0;
+    }
     pub fn save_reg(&mut self,reg:RegId) -> i32{
         let pos = self.pos;
         match self.reg_pos.get(&reg){

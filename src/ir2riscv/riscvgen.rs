@@ -405,6 +405,7 @@ impl RiscvGen<&Value> {
             ValueKind::Call(call) => {
                 let func = call.callee();
                 let args = call.args();
+                stack_frame.clean_param();
                 for (i, arg) in args.iter().enumerate() {
                     if i < 8 {
                         RiscvGen(arg)
