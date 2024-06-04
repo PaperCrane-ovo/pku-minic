@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Path: src/ast.rs
 
 use std::ops::Range;

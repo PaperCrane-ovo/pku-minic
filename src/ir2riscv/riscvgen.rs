@@ -463,6 +463,7 @@ impl RiscvGen<&Value> {
             ValueKind::Integer(i) => {
                 // TODO: 0的处理
                 if i.value() == 0 {
+                    asm.push(TempRiscv::Inst(RiscvInst::Li(dest_reg, 0)));
                     Ok(RegId::X0)
                 } else {
                     // asm.push_str(&format!("    li {}, {}\n",dest_reg,i.value()));

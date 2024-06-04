@@ -45,7 +45,7 @@ impl StackFrame{
         dbg!(size,call,param_count);
         
         self.size = size + {if call {4} else {0}} + {if param_count > 8 {4*(param_count-8)} else {0}};
-        self.size = if self.size % 16 == 0 {self.size} else {self.size/16*16+16} + 100;
+        self.size = if self.size % 16 == 0 {self.size} else {self.size/16*16+16};
         self.call = call;
         self.param_pos = 0;
         self.pos = self.size as i32 -4;
