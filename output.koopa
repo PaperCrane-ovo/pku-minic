@@ -16,6 +16,12 @@ decl @starttime()
 
 decl @stoptime()
 
+fun @k() {
+%k_0:
+  store 5, @a
+  ret
+}
+
 fun @main(): i32 {
 %main_0:
   %0 = alloc i32

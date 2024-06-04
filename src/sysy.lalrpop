@@ -144,7 +144,7 @@ Stmt: Span<Stmt> = {
 MatchIfStmt: Span<Stmt> ={
     <start:@L> <block: Block> <end:@R> => Stmt::Block{block}.into_span(start, end),
     <start:@L> <exp:Exp?> ";" <end:@R> => Stmt::Exp{exp}.into_span(start, end),
-    <start:@L> "return" <exp: Exp> ";" <end:@R> => Stmt::Return(Return{exp:exp}).into_span(start, end),
+    <start:@L> "return" <exp: Exp?> ";" <end:@R> => Stmt::Return(exp).into_span(start, end),
     <start:@L> <ident:Ident> "=" <exp: Exp> ";" <end:@R> => Stmt::Assign{ident:ident, exp:exp}.into_span(start, end),
     <start:@L> "if" "(" <cond:Exp> ")" <then:MatchIfStmt> "else" <els:MatchIfStmt> <end:@R> => Stmt::If{cond:cond, then:Box::new(then), els:Some(Box::new(els))}.into_span(start, end),
     <start:@L> "while" "(" <cond: Exp> ")" <body: MatchIfStmt> <end:@R> => Stmt::While {cond,body: Box::new(body),}.into_span(start, end),

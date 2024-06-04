@@ -194,7 +194,7 @@ impl Spanned for InitVal{
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub enum BType{
     Int,
     Void,
@@ -218,7 +218,7 @@ impl Spanned for ConstExp{
 
 #[derive(Debug,Clone)]
 pub enum Stmt {
-    Return(Return),
+    Return(Option<Exp>),
     Assign{
         ident: Span<String>,
         exp: Exp,
@@ -247,10 +247,6 @@ impl NonSpanned for Stmt{}
 
 
 
-#[derive(Debug,Clone)]
-pub struct Return {
-    pub exp: Exp,
-}
 
 
 #[derive(Debug,Clone)]

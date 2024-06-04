@@ -257,8 +257,17 @@ impl Stmt {
     pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) {
         match self {
             Stmt::Return(r) => {
-                let expr = r.generate_program(core, symtable);
-                let ret = core.new_value(InstType::Ret(Some(expr)));
+                let mut expr = match r {
+                    Some(r) => Some(r.generate_program(core, symtable)),
+                    None => None,
+                };
+                if expr.is_none() && core.return_type != BType::Void{
+                    expr = Some(core.new_int(0));
+                }
+                if expr.is_some() && core.return_type == BType::Void{
+                    expr = None;
+                }
+                let ret = core.new_value(InstType::Ret(expr));
                 core.push_inst(ret);
             }
             Stmt::Assign { ident, exp } => {
@@ -365,11 +374,6 @@ impl Stmt {
     }
 }
 
-impl Return {
-    pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) -> Value {
-        self.exp.generate_program(core, symtable)
-    }
-}
 
 impl Exp {
     pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) -> Value {
