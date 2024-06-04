@@ -81,24 +81,42 @@ impl Display for RegId{
     }
 }
 
-// pub struct RegCache{
-//     pub cache: HashMap<Value,RegId>,
-
-// }
-
-// impl RegCache{
-//     pub fn new() -> Self{
-//         RegCache{
-//             cache: HashMap::new(),
-//         }
-//     }
-//     pub fn insert(&mut self, value: Value, reg: RegId){
-//         self.cache.insert(value, reg);
-//     }
-//     pub fn get(&self, value: Value) -> RegId{
-//         *self.cache.get(&value).unwrap()
-//     }
-//     pub fn remove(&mut self, value: Value){
-//         self.cache.remove(&value);
-//     }
-// }
+impl From<String> for RegId{
+    fn from(s:String) -> Self {
+        match &s[..]{
+            "x0" => RegId::X0,
+            "ra" => RegId::RA,
+            "sp" => RegId::SP,
+            "gp" => RegId::GP,
+            "tp" => RegId::TP,
+            "a0" => RegId::A0,
+            "a1" => RegId::A1,
+            "a2" => RegId::A2,
+            "a3" => RegId::A3,
+            "a4" => RegId::A4,
+            "a5" => RegId::A5,
+            "a6" => RegId::A6,
+            "a7" => RegId::A7,
+            "t0" => RegId::T0,
+            "t1" => RegId::T1,
+            "t2" => RegId::T2,
+            "t3" => RegId::T3,
+            "t4" => RegId::T4,
+            "t5" => RegId::T5,
+            "t6" => RegId::T6,
+            "s0" => RegId::S0,
+            "s1" => RegId::S1,
+            "s2" => RegId::S2,
+            "s3" => RegId::S3,
+            "s4" => RegId::S4,
+            "s5" => RegId::S5,
+            "s6" => RegId::S6,
+            "s7" => RegId::S7,
+            "s8" => RegId::S8,
+            "s9" => RegId::S9,
+            "s10" => RegId::S10,
+            "s11" => RegId::S11,
+            _ => panic!("Invalid register name"),
+        }
+    }
+}

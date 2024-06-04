@@ -1,9 +1,9 @@
+use ir2riscv::riscvgen::RiscvGen;
 use koopa::back::KoopaGenerator;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
 use std::io::{Result, Write};
-use crate::ir2riscv::riscvgen::GenerateAsm;
 
 mod ast;
 mod ir2riscv;
@@ -61,7 +61,7 @@ fn main() -> Result<()> {
 
             let mut outfile = std::fs::File::create(_output)?;
             let mut asm = Vec::new();
-            ir_program.generate(&mut asm);
+            RiscvGen(&ir_program).generate(&mut asm);
             for line in asm {
                 writeln!(outfile, "{}", line)?;
             }

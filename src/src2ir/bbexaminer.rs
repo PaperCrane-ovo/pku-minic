@@ -52,6 +52,12 @@ impl BBExaminer {
         let dfg = core.dfg_mut();
         for block in vector {
             let bb = dfg.bb_mut(block);
+            if let Some(_name) = bb.name(){
+                if _name.ends_with("entry"){
+                    bb.set_name(Some(format!("%{}_{}", name, count)));
+                    count += 1;
+                }
+            }
             if let None = bb.name() {
                 bb.set_name(Some(format!("%{}_{}", name, count)));
                 count += 1;

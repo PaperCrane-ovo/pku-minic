@@ -4,4 +4,5 @@ mod stack;
 mod riscv;
 // Path: src/ir2riscv/mod.rs
 mod imm;
-
+mod global;
+mod analyzer;

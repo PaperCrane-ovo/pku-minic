@@ -91,6 +91,11 @@ pub enum RiscvInst{
     // TODO
     Ret,
 
+    /// Call function
+    Call(String),
+    /// load address
+    La(RegId,String),
+
     Nop,
 
 
@@ -131,6 +136,8 @@ impl Display for RiscvInst{
             RiscvInst::Beqz(rs1,label) => write!(f,"beqz {},{}",rs1,label),
             RiscvInst::Bne(rs1,rs2,label) => write!(f,"bne {},{},{}",rs1,rs2,label),
             RiscvInst::Bnez(rs1,label) => write!(f,"bnez {},{}",rs1,label),
+            RiscvInst::Call(func) => write!(f,"call {}",func),
+            RiscvInst::La(rd,label) => write!(f,"la {},{}",rd,label),
             RiscvInst::Ret => write!(f,"ret"),
             RiscvInst::Nop => write!(f,"nop"),
         }
