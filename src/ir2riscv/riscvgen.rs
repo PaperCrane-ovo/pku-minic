@@ -412,10 +412,11 @@ impl RiscvGen<&Value> {
                             .load_value(asm, dfg, stack_frame, format!("a{}", i).into(), analyzer)
                             .expect("load arg to reg failed");
                     } else {
-                        stack_frame.insert_param(*arg);
                         RiscvGen(arg)
                             .load_value(asm, dfg, stack_frame, RegId::T0, analyzer)
                             .expect("load arg to stack failed");
+                        
+                        stack_frame.insert_param(*arg);
                         let pos = stack_frame.get(*arg);
                         let i12_pos = I12::build(pos as i32, asm);
                         match i12_pos {
