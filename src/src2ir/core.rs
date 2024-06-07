@@ -97,6 +97,12 @@ impl <'a,'b> Core<'a,'b>{
             InstType::Integer(value) => {
                 new_value.integer(value)
             }
+            InstType::GetElementPtr(ptr, index) => {
+                new_value.get_elem_ptr(ptr, index)
+            }
+            InstType::GetPtr(ptr, index) => {
+                new_value.get_ptr(ptr, index)
+            }
         }
     }
 
@@ -144,5 +150,7 @@ pub enum InstType{
     Binary(BinaryOp,Value,Value),
     Jump(BasicBlock),
     Integer(i32),
+    GetElementPtr(Value,Value),
+    GetPtr(Value,Value),
 }
 

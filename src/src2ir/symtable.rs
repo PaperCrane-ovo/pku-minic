@@ -3,14 +3,16 @@ use std::{collections::HashMap, hash::Hash};
 
 use koopa::ir::{Function, Value};
 
+use super::mytype::MyType;
+
 #[allow(unused)]
 
 /// 符号表的实现
 
 pub enum Symbol{
     Const(i32),
-    Var(Value),
-    Func(Function),
+    Var(Value,MyType,bool), // Value,Type,is_const
+    Func(Function,Vec<MyType>,MyType),
 }
 pub struct SymTable{
     table: ChainMap<String,Symbol>,

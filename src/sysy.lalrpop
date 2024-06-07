@@ -39,7 +39,8 @@ FuncParams: Vec<Span<FuncParam>> = {
 }
 
 FuncParam: Span<FuncParam> = {
-    <start:@L> <ty:BType> <ident:Ident> <end:@R> => Span{node: FuncParam{ty,ident}, start, end}
+    <start:@L> <ty:BType> <ident:Ident> <end:@R> => FuncParam{ty,ident,indices:None}.into_span(start,end),
+    <start:@L> <ty: BType> <ident: Ident> "[" "]" <indices: ("[" <ConstExp> "]")*> <end:@R> => FuncParam { ty, ident, indices: Some(indices) }.into_span(start, end),
 }
 
 // 出现移进规约冲突，不再使用FuncType
@@ -50,32 +51,8 @@ FuncParam: Span<FuncParam> = {
 
 Block: Span<Block> = {
     <start:@L> "{" <items: BlockItem*> "}" <end:@R> => {
-        let mut has_return:bool = false;
-        let mut temp = Vec::<BlockItem>::new();
-        // 去除第一个return之后的所有stmt
-        for item in items {
-            match item {
-                BlockItem::Stmt{ref stmt} => {
-                    if let Stmt::Return(_) = stmt.node {
-                        if has_return {
-                            continue;
-                        }
-                        has_return = true;
-                    }else{
-                        if has_return {
-                            continue;
-                        }
-                    }
-                },
-                _ => {
-                    if has_return {
-                        continue;
-                    }
-                }
-            }
-            temp.push(item.clone());
-        }
-        Block { items: temp }.into_span(start, end)
+        
+        Block { items: items.into() }.into_span(start, end)
     }
 }
 
@@ -97,29 +74,36 @@ BType: Span<BType> = {
 VarDecl: Span<VarDecl> = {
     <start:@L> <ty:BType> <mut defs:(<VarDef> ",")*> <def: VarDef> ";" <end:@R> => {
         defs.push(def);
-        VarDecl { ty, defs }.into_span(start, end)
+        VarDecl { ty, defs:defs.into() }.into_span(start, end)
     }
 }
 
-VarDef : VarDef = {
-    <ident: Ident> => VarDef{ident:ident, init:None},
-    <ident: Ident> "=" <init:InitVal> => VarDef{ident:ident, init:Some(init)},
+VarDef : Span<VarDef> = {
+
+    <start:@L> <ident: Ident> <indices: ("[" <ConstExp> "]")*> <end:@R> => VarDef{ident,indices, init:None}.into_span(start, end),
+    <start:@L> <ident: Ident> <indices: ("[" <ConstExp> "]")*> "=" <init:InitVal> <end:@R> => VarDef{ident , indices , init:Some(init)}.into_span(start, end),
 }
 
-InitVal: InitVal = {
-    <exp:Exp> => InitVal{<>}
+InitVal: Span<InitVal> = {
+    <start:@L> <exp:Exp> <end:@R> => InitVal::Exp(exp).into_span(start, end),
+    <start:@L> "{" <mut vals:(<InitVal> ",")*> <val: InitVal?> "}" <end:@R> => {
+        vals.extend(val);
+        InitVal::InitList(vals.into()).into_span(start, end)
+    }
 }
 
 ConstDecl: Span<ConstDecl> = {
     <start:@L> "const" <ty:BType> <mut defs:(<ConstDef> ",")*> <def: ConstDef> ";" <end:@R> => {
         defs.push(def);
-        ConstDecl { ty, defs }.into_span(start, end)
+        ConstDecl { ty, defs:defs.into() }.into_span(start, end)
     }
 }
 
 ConstDef : ConstDef = {
-    <ident: Ident> "=" <exp:ConstExp> => ConstDef{<>},
+    <ident: Ident> <indices: ("[" <ConstExp> "]")*> "=" <init:InitVal> => ConstDef{ident,indices,init},
 }
+
+
 
 ConstExp: ConstExp = {
     <exp:Exp> => ConstExp{<>}
@@ -145,7 +129,7 @@ MatchIfStmt: Span<Stmt> ={
     <start:@L> <block: Block> <end:@R> => Stmt::Block{block}.into_span(start, end),
     <start:@L> <exp:Exp?> ";" <end:@R> => Stmt::Exp{exp}.into_span(start, end),
     <start:@L> "return" <exp: Exp?> ";" <end:@R> => Stmt::Return(exp).into_span(start, end),
-    <start:@L> <ident:Ident> "=" <exp: Exp> ";" <end:@R> => Stmt::Assign{ident:ident, exp:exp}.into_span(start, end),
+    <start:@L> <lval:LVal> "=" <exp: Exp> ";" <end:@R> => Stmt::Assign{lval, exp:exp}.into_span(start, end),
     <start:@L> "if" "(" <cond:Exp> ")" <then:MatchIfStmt> "else" <els:MatchIfStmt> <end:@R> => Stmt::If{cond:cond, then:Box::new(then), els:Some(Box::new(els))}.into_span(start, end),
     <start:@L> "while" "(" <cond: Exp> ")" <body: MatchIfStmt> <end:@R> => Stmt::While {cond,body: Box::new(body),}.into_span(start, end),
     <start:@L> "break" ";" <end:@R> => Stmt::Break(().into_span(start, end)).into_span(start, end),
@@ -163,7 +147,11 @@ Exp: Exp = <lor_exp:LOrExp> => <>;
 PrimaryExp: Exp = {
     "(" <exp: Exp> ")" => <>,
     <num:Number> => Exp::Number(<>),
-    Ident => Exp::LVar(<>),
+    LVal => Exp::LVal(<>),
+}
+
+LVal: Span<LVal> = {
+    <start:@L> <ident: Ident> <indices: ("[" <Exp> "]")*> <end:@R> => LVal{ident,indices}.into_span(start,end),
 }
 
 

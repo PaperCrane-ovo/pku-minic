@@ -10,6 +10,8 @@ mod ir2riscv;
 mod src2ir;
 mod utils;
 
+
+
 // 引用 lalrpop 生成的解析器
 // 因为我们刚刚创建了 sysy.lalrpop, 所以模块名是 sysy
 lalrpop_mod!(sysy);
@@ -48,7 +50,7 @@ fn main() -> Result<()> {
             // println!("{:#?}", ast);
             // 输出 koopa 代码到output文件
             // 输出重定向
-            let koopa_ir = ast.build_ir();
+            let koopa_ir = ast.build_ir().expect("build ir failed");
             let outfile = std::fs::File::create(_output)?;
             let mut generator = KoopaGenerator::new(outfile);
             generator.generate_on(&koopa_ir)?;
@@ -56,7 +58,7 @@ fn main() -> Result<()> {
         }
         Mode::RISCV => {
             let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
-            let ir_program = ast.build_ir();
+            let ir_program = ast.build_ir().expect("build ir failed");
 
 
             let mut outfile = std::fs::File::create(_output)?;

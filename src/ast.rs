@@ -6,7 +6,7 @@ use std::ops::Range;
 
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct CompUnit {
     pub global_items: Vec<GlobalItem>,
 }
@@ -72,16 +72,10 @@ impl Spanned for FuncDef{
 pub struct FuncParam {
     pub ty: Span<BType>,
     pub ident: Span<String>,
+    pub indices: Option<Vec<ConstExp>>,
 }
 
-impl Spanned for FuncParam{
-    fn start_pos(&self)->usize{
-        self.ty.start_pos()
-    }
-    fn end_pos(&self)->usize{
-        self.ident.end_pos()
-    }
-}
+impl NonSpanned for FuncParam{}
 
 #[derive(Debug,Clone)]
 pub struct Block{
@@ -135,7 +129,7 @@ impl Spanned for Decl{
 #[derive(Debug,Clone)]
 pub struct VarDecl{
     pub ty: Span<BType>,
-    pub defs: Vec<VarDef>,
+    pub defs: Vec<Span<VarDef>>,
 }
 
 impl NonSpanned for VarDecl{}
@@ -143,20 +137,11 @@ impl NonSpanned for VarDecl{}
 #[derive(Debug,Clone)]
 pub struct VarDef{
     pub ident: Span<String>,
-    pub init: Option<InitVal>,
+    pub indices: Vec<ConstExp>,
+    pub init: Option<Span<InitVal>>,
 }
 
-impl Spanned for VarDef{
-    fn start_pos(&self)->usize{
-        self.ident.start_pos()
-    }
-    fn end_pos(&self)->usize{
-        match &self.init{
-            Some(init_val)=>init_val.end_pos(),
-            None=>self.ident.end_pos(),
-        }
-    }
-}
+impl NonSpanned for VarDef{}
 
 #[derive(Debug,Clone)]
 pub struct ConstDecl{
@@ -169,7 +154,8 @@ impl NonSpanned for ConstDecl{}
 #[derive(Debug,Clone)]
 pub struct ConstDef{
     pub ident: Span<String>,
-    pub exp: ConstExp,
+    pub indices: Vec<ConstExp>,
+    pub init: Span<InitVal>,
 }
 
 impl Spanned for ConstDef{
@@ -177,23 +163,19 @@ impl Spanned for ConstDef{
         self.ident.start_pos()
     }
     fn end_pos(&self)->usize{
-        self.exp.end_pos()
+        self.init.end_pos()
     }
 }
+
 
 #[derive(Debug,Clone)]
-pub struct InitVal{
-    pub exp: Exp,
+pub enum InitVal{
+    Exp(Exp),
+    InitList(Vec<Span<InitVal>>),
 }
 
-impl Spanned for InitVal{
-    fn start_pos(&self)->usize{
-        self.exp.start_pos()
-    }
-    fn end_pos(&self)->usize{
-        self.exp.end_pos()
-    }
-}
+impl NonSpanned for InitVal{}
+
 
 #[derive(Debug,Clone,PartialEq)]
 pub enum BType{
@@ -221,7 +203,7 @@ impl Spanned for ConstExp{
 pub enum Stmt {
     Return(Option<Exp>),
     Assign{
-        ident: Span<String>,
+        lval: Span<LVal>,
         exp: Exp,
     },
     Block{
@@ -262,7 +244,7 @@ pub enum Exp{
         exp2: Box<Exp>,
     },
     Number(Span<i32>),
-    LVar(Span<String>),
+    LVal(Span<LVal>),
     Call(Span<CallExp>),
 }
 
@@ -272,7 +254,7 @@ impl Spanned for Exp{
             Exp::UnaryExp{op,exp: _}=>op.start_pos(),
             Exp::BinaryExp{op: _,exp1,exp2:_}=>exp1.start_pos(),
             Exp::Number(num)=>num.start_pos(),
-            Exp::LVar(ident)=>ident.start_pos(),
+            Exp::LVal(ident)=>ident.start_pos(),
             Exp::Call(call_exp)=>call_exp.start_pos(),
         }
     }
@@ -281,11 +263,18 @@ impl Spanned for Exp{
             Exp::UnaryExp{op: _,exp}=>exp.end_pos(),
             Exp::BinaryExp{op: _,exp1: _,exp2}=>exp2.end_pos(),
             Exp::Number(num)=>num.end_pos(),
-            Exp::LVar(ident)=>ident.end_pos(),
+            Exp::LVal(ident)=>ident.end_pos(),
             Exp::Call(call_exp)=>call_exp.end_pos(),
         }
     }
 }
+
+#[derive(Debug,Clone)]
+pub struct LVal{
+    pub ident: Span<String>,
+    pub indices: Vec<Exp>,
+}
+impl NonSpanned for LVal{}
 
 #[derive(Debug,Clone)]
 pub struct CallExp{
@@ -368,4 +357,5 @@ impl<T> Spanned for Span<T>{
         self.end
     }
 }
+
 
