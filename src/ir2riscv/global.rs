@@ -5,7 +5,8 @@ use koopa::ir::Value;
 
 pub struct GlobalValue{
     pub size: usize,
-    pub init: Option<i32>,
+    pub base_size: usize,
+    pub init: Option<Vec<i32>>,
     pub name: Option<String>,
 }
 pub struct GlobalValues{
@@ -18,11 +19,12 @@ impl GlobalValues{
             values: HashMap::new(),
         }
     }
-    pub fn add_global(&mut self,value:Value,size:usize,init:Option<i32>,name:Option<String>){
+    pub fn add_global(&mut self,value:Value,size:usize,init:Option<Vec<i32>>,name:Option<String>,base_size:usize){
         self.values.insert(value,GlobalValue{
             size,
             init,
             name,
+            base_size,
         });
     }
     pub fn get_global(&self,value:&Value)->Option<&GlobalValue>{

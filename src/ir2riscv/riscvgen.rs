@@ -1,5 +1,5 @@
 use koopa::ir::{
-    dfg::DataFlowGraph, BasicBlock, BinaryOp, FunctionData, Program, Value, ValueKind,
+    dfg::DataFlowGraph, BasicBlock, BinaryOp, FunctionData, Program, TypeKind, Value, ValueKind,
 };
 
 use crate::utils::is_const;
@@ -9,19 +9,40 @@ use super::{
     imm::{I12pos, I12},
     register::RegId,
     riscv::{RiscvInst, TempRiscv},
-    stack::StackFrame,
+    stack::{PtrType, StackFrame},
 };
 
 use miette::Result;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 pub type AsmProgram = Vec<TempRiscv>;
+
+// 一个全局ID生成器
+static GLOBAL_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+const MAX_ID: usize = usize::MAX / 2;
+
+fn generate_id() -> usize {
+    // 检查两次溢出，否则直接加一可能导致溢出
+    let current_val = GLOBAL_ID_COUNTER.load(Ordering::Relaxed);
+    if current_val > MAX_ID {
+        panic!("Factory ids overflowed");
+    }
+    GLOBAL_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let next_id = GLOBAL_ID_COUNTER.load(Ordering::Relaxed);
+    if next_id > MAX_ID {
+        panic!("Factory ids overflowed");
+    }
+    next_id
+}
 
 // 重构一下
 pub struct RiscvGen<T>(pub T);
 
 impl RiscvGen<&Program> {
     pub fn generate(&mut self, asm: &mut AsmProgram) {
-        let mut analyzer = Analyzer::new();
+        let mut analyzer = Analyzer::new(self.0);
+
         analyzer.analyze_global(self.0);
         analyzer.analyze_function(self.0);
 
@@ -32,12 +53,25 @@ impl RiscvGen<&Program> {
             let name = global.name.as_deref().unwrap();
             asm.push(TempRiscv::Segment(format!(".global {}", name)));
             asm.push(TempRiscv::Label(name.to_string()));
-            if let Some(init) = global.init {
-                asm.push(TempRiscv::Segment(format!(".word {}", init))); // 数组lv9
+            if let Some(init) = &global.init {
+                // asm.push(TempRiscv::Segment(format!(".word {}", init))); // 数组lv9
+                for &i in init.iter() {
+                    asm.push(TempRiscv::Segment(match i {
+                        0 => format!(".zero {}", 4),
+                        _ => format!(".word {}", i),
+                    }))
+                }
             } else {
-                asm.push(TempRiscv::Segment(format!(".zero {}", 4)));
+                asm.push(TempRiscv::Segment(format!(".zero {}", global.size)));
             }
         }
+
+        // {
+        //     dbg!("global variable init");
+        //     for i in asm.iter(){
+        //         println!("{}",i);
+        //     }
+        // }
 
         asm.push(TempRiscv::Segment(String::from(".text")));
 
@@ -60,7 +94,7 @@ impl RiscvGen<&FunctionData> {
 
         let mut stack_frame = StackFrame::new();
         let stack_size = stack_frame.get_stack_size(&self.0);
-        dbg!(stack_size);
+        // dbg!(stack_size);
         let stack_size = I12::build(-(stack_size as i32), asm);
         match stack_size {
             I12pos::Imm12(stack_size) => {
@@ -293,7 +327,17 @@ impl RiscvGen<&Value> {
                     _ => {}
                 }
             }
-            ValueKind::Alloc(_alloc) => {}
+            ValueKind::Alloc(_alloc) => {
+                let ty = match value_data.ty().kind() {
+                    TypeKind::Pointer(ty) => ty,
+                    _ => unreachable!(),
+                };
+                if let TypeKind::Array(_, _) = ty.kind() {
+                    stack_frame.insert_array(*self.0, ty.size());
+                    stack_frame.local_type.insert(*self.0, PtrType::Array);
+                }
+                // stack_frame.local_type.insert(*self.0, PtrType::LocalPtr);
+            }
             // 在这里有可能会有参数插入
             ValueKind::Store(store) => {
                 let dest = store.dest();
@@ -353,7 +397,38 @@ impl RiscvGen<&Value> {
                     let val_reg = RiscvGen(&val)
                         .load_value(asm, dfg, stack_frame, RegId::T1, analyzer)
                         .unwrap();
-                    RiscvGen(&dest).store_value(asm, dfg, stack_frame, val_reg);
+                    let dest_type = stack_frame.get_type(dest);
+                    // dbg!(dest_type);
+                    match dest_type {
+                        Some(PtrType::Array) => {
+                            let dest_offset = RiscvGen(&dest)
+                                .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                                .unwrap();
+                            asm.push(TempRiscv::Inst(RiscvInst::Add(
+                                RegId::A0,
+                                RegId::SP,
+                                dest_offset,
+                            )));
+                            asm.push(TempRiscv::Inst(RiscvInst::Sw(
+                                val_reg,
+                                I12 { value: 0 },
+                                RegId::A0,
+                            )));
+                        }
+                        Some(PtrType::Ptr) => {
+                            let pos = RiscvGen(&dest)
+                                .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                                .unwrap();
+                            asm.push(TempRiscv::Inst(RiscvInst::Sw(
+                                val_reg,
+                                I12 { value: 0 },
+                                pos,
+                            )));
+                        }
+                        _ => {
+                            RiscvGen(&dest).store_value(asm, dfg, stack_frame, val_reg);
+                        }
+                    }
                 }
             }
             ValueKind::Load(load) => {
@@ -369,10 +444,40 @@ impl RiscvGen<&Value> {
                     )));
                     self.store_value(asm, dfg, stack_frame, RegId::A0);
                 } else {
-                    let reg = RiscvGen(&src)
-                        .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
-                        .unwrap();
-                    self.store_value(asm, dfg, stack_frame, reg);
+                    let src_type = stack_frame.get_type(src);
+                    match src_type {
+                        Some(PtrType::Ptr) => {
+                            // debug_assert_eq!(*ptr, src);
+                            // 全局数组的指针
+                            let ptr = RiscvGen(&src)
+                                .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                                .unwrap();
+                            asm.push(TempRiscv::Inst(RiscvInst::Lw(
+                                RegId::A0,
+                                I12 { value: 0 },
+                                ptr,
+                            )));
+                            self.store_value(asm, dfg, stack_frame, RegId::A0);
+                        }
+                        Some(PtrType::Array) => {
+                            let ptr = RiscvGen(&src)
+                                .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                                .unwrap();
+                            asm.push(TempRiscv::Inst(RiscvInst::Add(RegId::A0, RegId::SP, ptr)));
+                            asm.push(TempRiscv::Inst(RiscvInst::Lw(
+                                RegId::A0,
+                                I12 { value: 0 },
+                                RegId::A0,
+                            )));
+                            self.store_value(asm, dfg, stack_frame, RegId::A0);
+                        }
+                        _ => {
+                            let reg = RiscvGen(&src)
+                                .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                                .unwrap();
+                            self.store_value(asm, dfg, stack_frame, reg);
+                        }
+                    }
                 }
             }
             ValueKind::Branch(branch) => {
@@ -388,13 +493,14 @@ impl RiscvGen<&Value> {
                     dfg.bb(false_block).name().as_deref().unwrap().to_string();
                 let true_block_label = format!("L{}", &true_block_label_name[1..]);
                 let false_block_label = format!("L{}", &false_block_label_name[1..]);
+                let id = generate_id();
                 asm.push(TempRiscv::Inst(RiscvInst::Bnez(
                     cond_reg,
-                    format!("{}", true_block_label),
+                    format!("jto{}_{}", true_block_label, id),
                 )));
                 asm.push(TempRiscv::Inst(RiscvInst::J(false_block_label)));
-                // asm.push(TempRiscv::Label(format!("jto{}", true_block_label)));
-                // asm.push(TempRiscv::Inst(RiscvInst::J(true_block_label)));
+                asm.push(TempRiscv::Label(format!("jto{}_{}", true_block_label, id)));
+                asm.push(TempRiscv::Inst(RiscvInst::J(true_block_label)));
             }
             ValueKind::Jump(jump) => {
                 let target = jump.target();
@@ -411,11 +517,24 @@ impl RiscvGen<&Value> {
                         RiscvGen(arg)
                             .load_value(asm, dfg, stack_frame, format!("a{}", i).into(), analyzer)
                             .expect("load arg to reg failed");
+                        if let Some(PtrType::Array) = stack_frame.get_type(*arg) {
+                            asm.push(TempRiscv::Inst(RiscvInst::Add(
+                                format!("a{}", i).into(),
+                                RegId::SP,
+                                format!("a{}", i).into(),
+                            )));
+                        }
                     } else {
                         RiscvGen(arg)
                             .load_value(asm, dfg, stack_frame, RegId::T0, analyzer)
                             .expect("load arg to stack failed");
-                        
+                        if let Some(PtrType::Array) = stack_frame.get_type(*arg) {
+                            asm.push(TempRiscv::Inst(RiscvInst::Add(
+                                RegId::T0,
+                                RegId::SP,
+                                RegId::T0,
+                            )));
+                        }
                         stack_frame.insert_param(*arg);
                         let pos = stack_frame.get(*arg);
                         let i12_pos = I12::build(pos as i32, asm);
@@ -448,6 +567,141 @@ impl RiscvGen<&Value> {
                 if !value_data.ty().is_unit() {
                     self.store_value(asm, dfg, stack_frame, RegId::A0);
                 }
+            }
+            ValueKind::GetElemPtr(get_elem_ptr) => {
+                // src is a pointer
+                let src = get_elem_ptr.src();
+                let index = get_elem_ptr.index();
+                if analyzer.has_global(src) {
+                    // global array
+                    let src_name = analyzer.get_global(src).unwrap().name.clone();
+                    asm.push(TempRiscv::Inst(RiscvInst::La(RegId::A0, src_name.unwrap())));
+                    let index_reg = RiscvGen(&index)
+                        .load_value(asm, dfg, stack_frame, RegId::T0, analyzer)
+                        .unwrap();
+                    let size_reg = RegId::T1;
+                    let size = {
+                        let global_values = &analyzer.program.borrow_values();
+                        let value_data = &global_values[&src];
+                        match value_data.ty().kind() {
+                            TypeKind::Pointer(ty) => match ty.kind() {
+                                TypeKind::Array(ty, size) => ty.size(),
+                                _ => value_data.ty().size(),
+                            },
+                            _ => value_data.ty().size(),
+                        }
+                    };
+                    asm.push(TempRiscv::Inst(RiscvInst::Li(size_reg, size as i32)));
+                    asm.push(TempRiscv::Inst(RiscvInst::Mul(
+                        RegId::T0,
+                        RegId::T0,
+                        size_reg,
+                    )));
+                    asm.push(TempRiscv::Inst(RiscvInst::Add(
+                        RegId::A0,
+                        RegId::A0,
+                        RegId::T0,
+                    )));
+                    self.store_value(asm, dfg, stack_frame, RegId::A0);
+                    stack_frame.local_type.insert(*self.0, PtrType::Ptr);
+                } else {
+                    let src_data = dfg.value(src);
+                    let size = match src_data.ty().kind() {
+                        TypeKind::Pointer(ty) => match ty.kind() {
+                            TypeKind::Array(ty, size) => ty.size(),
+                            _ => src_data.ty().size(),
+                        },
+                        _ => src_data.ty().size(),
+                    };
+                    let offset = RiscvGen(&index)
+                        .load_value(asm, dfg, stack_frame, RegId::T0, analyzer)
+                        .unwrap();
+                    asm.push(TempRiscv::Inst(RiscvInst::Li(RegId::T1, size as i32)));
+                    asm.push(TempRiscv::Inst(RiscvInst::Mul(
+                        RegId::T0,
+                        RegId::T0,
+                        RegId::T1,
+                    )));
+                    match stack_frame.get_type(src) {
+                        Some(PtrType::Ptr) => {
+                            RiscvGen(&src)
+                                .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                                .unwrap();
+                        }
+                        Some(PtrType::Array) => {
+                            asm.push(TempRiscv::Inst(RiscvInst::Li(
+                                RegId::A0,
+                                stack_frame.get(src),
+                            )));
+                            asm.push(TempRiscv::Inst(RiscvInst::Add(
+                                RegId::A0,
+                                RegId::SP,
+                                RegId::A0,
+                            )));
+                        }
+                        _ => unreachable!(),
+                    }
+                    asm.push(TempRiscv::Inst(RiscvInst::Add(
+                        RegId::A0,
+                        RegId::A0,
+                        RegId::T0,
+                    )));
+                    self.store_value(asm, dfg, stack_frame, RegId::A0);
+                    stack_frame.local_type.insert(*self.0, PtrType::Ptr);
+                }
+            }
+            ValueKind::GetPtr(get_ptr) => {
+                let index = get_ptr.index();
+                let src = get_ptr.src();
+                let size = if dfg.values().contains_key(&src) {
+                    let ty = dfg.value(src).ty();
+                    match ty.kind() {
+                        TypeKind::Pointer(ty) => ty.size(),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    let global = analyzer.get_global(src).unwrap();
+                    global.base_size
+                };
+                let offset = RiscvGen(&index)
+                    .load_value(asm, dfg, stack_frame, RegId::T0, analyzer)
+                    .unwrap();
+                asm.push(TempRiscv::Inst(RiscvInst::Li(RegId::T1, size as i32)));
+                asm.push(TempRiscv::Inst(RiscvInst::Mul(
+                    RegId::T0,
+                    RegId::T0,
+                    RegId::T1,
+                )));
+                match stack_frame.get_type(src) {
+                    Some(PtrType::Ptr) => {
+                        RiscvGen(&src)
+                            .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                            .unwrap();
+                    }
+                    Some(PtrType::Array) => {
+                        asm.push(TempRiscv::Inst(RiscvInst::Li(
+                            RegId::A0,
+                            stack_frame.get(src),
+                        )));
+                        asm.push(TempRiscv::Inst(RiscvInst::Add(
+                            RegId::A0,
+                            RegId::SP,
+                            RegId::A0,
+                        )));
+                    }
+                    _ => {
+                        RiscvGen(&src)
+                            .load_value(asm, dfg, stack_frame, RegId::A0, analyzer)
+                            .unwrap();
+                    }
+                }
+                asm.push(TempRiscv::Inst(RiscvInst::Add(
+                    RegId::A0,
+                    RegId::A0,
+                    RegId::T0,
+                )));
+                self.store_value(asm, dfg, stack_frame, RegId::A0);
+                stack_frame.local_type.insert(*self.0, PtrType::Ptr);
             }
 
             _ => {}

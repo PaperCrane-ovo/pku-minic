@@ -1,5 +1,6 @@
 use ir2riscv::riscvgen::RiscvGen;
 use koopa::back::KoopaGenerator;
+use koopa::ir::Type;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
@@ -57,6 +58,8 @@ fn main() -> Result<()> {
         
         }
         Mode::RISCV => {
+            Type::set_ptr_size(4);
+
             let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
             let ir_program = ast.build_ir().expect("build ir failed");
 

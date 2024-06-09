@@ -18,63 +18,38 @@ fun @f1d(@arr: *i32) {
 %f1d_0:
   %arr = alloc *i32
   store @arr, %arr
-  @i = alloc i32
-  store 0, @i
-  jump %f1d_1
-
-%f1d_1:
-  %0 = load @i
-  %1 = lt %0, 10
-  br %1, %f1d_2, %f1d_3
-
-%f1d_2:
-  %2 = load @i
-  %3 = load %arr
-  %4 = getptr %3, %2
-  %5 = load @i
-  store %5, %4
-  %6 = load @i
-  %7 = add %6, 1
-  store %7, @i
-  jump %f1d_1
-
-%f1d_3:
-  ret
-}
-
-fun @f2d(@arr: *[i32, 10]) {
-%f2d_0:
-  %arr = alloc *[i32, 10]
-  store @arr, %arr
-  %8 = load %arr
-  %9 = getptr %8, 1
-  %10 = getelemptr %9, 2
-  store 3, %10
-  @i = alloc i32
-  store 0, @i
-  jump %f2d_1
-
-%f2d_1:
-  %11 = load @i
-  %12 = lt %11, 10
-  br %12, %f2d_2, %f2d_3
-
-%f2d_2:
-  %13 = load @i
-  %14 = load %arr
-  %15 = getptr %14, %13
-  %16 = getelemptr %15, 0
-  call @f1d(%16)
-  %17 = load @i
-  %18 = add %17, 1
-  store %18, @i
-  jump %f2d_1
-
-%f2d_3:
+  %0 = load %arr
+  %1 = getptr %0, 0
+  store 10, %1
   ret
 }
 
 fun @main(): i32 {
 %main_0:
+  @arr = alloc [i32, 10]
+  %2 = getelemptr @arr, 0
+  store 1, %2
+  %3 = getelemptr @arr, 1
+  store 2, %3
+  %4 = getelemptr @arr, 2
+  store 3, %4
+  %5 = getelemptr @arr, 3
+  store 4, %5
+  %6 = getelemptr @arr, 4
+  store 5, %6
+  %7 = getelemptr @arr, 5
+  store 0, %7
+  %8 = getelemptr @arr, 6
+  store 0, %8
+  %9 = getelemptr @arr, 7
+  store 0, %9
+  %10 = getelemptr @arr, 8
+  store 0, %10
+  %11 = getelemptr @arr, 9
+  store 0, %11
+  %12 = getelemptr @arr, 0
+  call @f1d(%12)
+  %13 = getelemptr @arr, 0
+  call @putarray(10, %13)
   ret 33
 }

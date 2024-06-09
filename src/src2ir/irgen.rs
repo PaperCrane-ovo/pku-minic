@@ -172,7 +172,7 @@ impl FuncParam {
 
 impl Block {
     pub fn generate_program(self, core: &mut Core, symtable: &mut SymTable) -> Result<()> {
-        dbg!("enter a block");
+        // dbg!("enter a block");
         symtable.push();
 
         for item in self.items {
@@ -180,7 +180,7 @@ impl Block {
         }
 
         symtable.pop();
-        dbg!("exit a block");
+        // dbg!("exit a block");
         Ok(())
     }
 }
@@ -315,6 +315,7 @@ impl ConstDef {
                 .generate_program_global(symtable, program)?;
 
             let array = program.new_value().global_alloc(init_list);
+            program.set_value_name(array, Some(format!("@{}", self.ident.node)));
 
             symtable.insert(self.ident.node, Symbol::Var(array, ty, true));
             Ok(())

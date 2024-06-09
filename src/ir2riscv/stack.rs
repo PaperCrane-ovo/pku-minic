@@ -4,10 +4,15 @@
 
 use std::collections::HashMap;
 
-use koopa::ir::{FunctionData, Value, ValueKind};
+use koopa::ir::{FunctionData, TypeKind, Value, ValueKind};
 
 use super::register::RegId;
 
+#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash)]
+pub enum PtrType{
+    Ptr,
+    Array,
+}
 
 
 pub struct StackFrame{
@@ -17,6 +22,7 @@ pub struct StackFrame{
     pub call:bool,
     pub param_pos: i32,
     pub reg_pos: HashMap<RegId,i32>,
+    pub local_type: HashMap<Value,PtrType>,
 }
 
 impl StackFrame{
@@ -28,9 +34,7 @@ impl StackFrame{
         for (&_bb,node) in func.layout().bbs(){
             for &inst in node.insts().keys(){
                 let inst = dfg.value(inst);
-                if !inst.ty().is_unit(){
-                    size += 4;
-                }
+                
                 if let ValueKind::Call(func_call) = inst.kind(){
                     // Calculate R
                     call = true;
@@ -39,12 +43,22 @@ impl StackFrame{
                     if arg_count > param_count{
                         param_count = arg_count;
                     }
-                }    
+                }else if let ValueKind::Alloc(_) = inst.kind(){
+                    let ty = match inst.ty().kind(){
+                        TypeKind::Pointer(ty) => ty,
+                        _ => unreachable!(),
+                    };
+                    size += ty.size();
+                    
+                    // dbg!(ty.size());
+                }else if !inst.ty().is_unit(){
+                    size += inst.ty().size();
+                }
+                
             }
         }
-        dbg!(size,call,param_count);
         
-        self.size = size + {if call {4} else {0}} + {if param_count > 8 {4*(param_count-8)} else {0}};
+        self.size = size  + {if call {4} else {0}} + {if param_count > 8 {4*(param_count-8)} else {0}};
         self.size = if self.size % 16 == 0 {self.size} else {self.size/16*16+16};
         self.call = call;
         self.param_pos = 0;
@@ -59,14 +73,27 @@ impl StackFrame{
             call: false,
             param_pos: 0,
             reg_pos: HashMap::new(),
+            local_type: HashMap::new(),
         }
     }
     pub fn insert(&mut self, value: Value){
         self.frame.insert(value, self.pos);
         self.pos -= 4;
     }
+    pub fn insert_array(&mut self,value: Value, size: usize){
+        self.pos = self.pos - size as i32 + 4;
+        self.frame.insert(value, self.pos);
+        self.pos -= 4;
+    }
+    pub fn insert_array_member(&mut self,ptr: Value,member: Value,offset: i32) {
+        let pos = *self.frame.get(&ptr).unwrap();
+        self.frame.insert(member, pos - offset);
+    }
     pub fn get(&self, value: Value) -> i32{
         *self.frame.get(&value).unwrap()
+    }
+    pub fn get_type(&self, value: Value) -> Option<&PtrType>{
+        self.local_type.get(&value)
     }
     pub fn contains(&self, value: Value) -> bool{
         self.frame.contains_key(&value)
